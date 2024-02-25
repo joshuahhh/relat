@@ -1,3 +1,6 @@
+// relat is our funky higher-level relational language
+// it's parsed (via relat-grammar.pegjs) into the AST defined here
+
 export type Range = {
   source: string,
   start: number,
@@ -10,7 +13,7 @@ export function rangeString({source, start, end}: Range): string {
 
 export type Expression = {range: Range} & (
   | {
-      type: 'literal',
+      type: 'constant',
       value: number | string,
     }
   | {

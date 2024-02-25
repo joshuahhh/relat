@@ -1,3 +1,5 @@
+// dl is an AST format for Datalog targetting Souffle
+
 export type RelationName = string;
 export type VariableName = string;
 
@@ -8,6 +10,9 @@ export type TypedVariable = {
   type: Type,
 }
 
+// For simplicity, dl only applies relations to variables. If you want to apply
+// a relation to a literal, make up a dummy variable and bind the variable to
+// the literal in a constraint.
 export type Atom = {
   relName: RelationName,
   args: VariableName[],
@@ -15,18 +20,23 @@ export type Atom = {
 
 export type Rule = {
   head: Atom,
-  body: Term[],
+  body: Literal[],
 }
 
-export type Term =
+// A "literal" is a piece of a rule's body. (It is not a value like 123 or
+// "abc"; those are "constants".)
+export type Literal =
   | (
     & Atom
     & {
         negated?: boolean,
+        // This is the one aggregate we support so far, "count". For simplicity,
+        // we only apply it to a single relation at a time. (This doesn't limit
+        // expressivity.)
         counting?: VariableName,
       }
     )
-  | string
+  | string  // raw Souffle code; used for constraints
 
 export type Command =
   | { type: 'rule' } & Rule
@@ -57,7 +67,7 @@ function commandToString(command: Command): string {
   }
   switch (command.type) {
     case 'rule':
-      return `${atomToString(command.head)} :- ${command.body.map(termToString).join(', ')}.`;
+      return `${atomToString(command.head)} :- ${command.body.map(literalToString).join(', ')}.`;
     case 'decl':
       const args = command.sig.map(({name, type}) => `${name} : ${type}`).join(', ');
       return `.decl ${command.relName}(${args})`;
@@ -72,17 +82,17 @@ function commandToString(command: Command): string {
   }
 }
 
-function termToString(term: Term): string {
-  if (typeof term === 'string') {
-    return term;
+function literalToString(lit: Literal): string {
+  if (typeof lit === 'string') {
+    return lit;
   }
-  if (term.counting) {
-    if (term.negated) {
-      throw new Error(`Can't negate a counting term`);
+  if (lit.counting) {
+    if (lit.negated) {
+      throw new Error(`Can't negate a counting literal`);
     }
-    return `${term.counting} = count : { ${atomToString(term)} }`;
+    return `${lit.counting} = count : { ${atomToString(lit)} }`;
   }
-  return `${term.negated ? '! ' : ''}${atomToString(term)}`;
+  return `${lit.negated ? '! ' : ''}${atomToString(lit)}`;
 }
 
 function atomToString(atom: Atom): string {

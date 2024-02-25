@@ -64,11 +64,11 @@ E6
   / "{" _ variable:Identifier _ ":" _ constraint:Expression _ "|" _ body:Expression _ "}"
   	{ return { type: "comprehension", variable, constraint, body, range: range() } }
   / number:$([1-9][0-9]*)
-    { return { type: "literal", value: +number, range: range() } }
+    { return { type: "constant", value: +number, range: range() } }
   / "'" _ string:$([^']*) _ "'"
-  	{ return { type: "literal", value: string, range: range() } }
+  	{ return { type: "constant", value: string, range: range() } }
   / "\"" _ string:$([^']*) _ "\""
-  	{ return { type: "literal", value: string, range: range() } }
+  	{ return { type: "constant", value: string, range: range() } }
   / name:Identifier
   	{ return { type: "identifier", name, range: range() } }
 

@@ -17,17 +17,18 @@ export type Environment = {
   // When you translate a Relat expression, you do so in the context of an
   // Environment.
   nextIndex: () => number,
-  // Generator for unique indices.
+    // Generator for unique indices.
   extSig: DL.TypedVariable[],
-  // extSig gives the types of scalar variables in scope. TODO: make this a record?
-  constraint: DL.Term[],
-  // constraint gives terms that constrain variables in extSig. For example, if
-  // we are translating a subexpression inside a comprehension, then the
-  // constraint will be the terms that constrain the comprehension variables.
-  // This is important to make sure that all variables are grounded.
+    // extSig gives the types of scalar variables in scope. TODO: make this a record?
+  constraint: DL.Literal[],
+    // constraint gives literals that constrain variables in extSig. For
+    // example, if we are translating a subexpression inside a comprehension,
+    // then the constraint will be the literals that constrain the comprehension
+    // variables. This is important to make sure that all variables are
+    // grounded.
   relScope: Record<string, IntExt>,
-  // relScope gives the types of relations in scope. These relations can come
-  // from input relations or from `let` bindings.
+    // relScope gives the types of relations in scope. These relations can come
+    // from input relations or from `let` bindings.
 }
 
 type IntExt = {
@@ -36,10 +37,10 @@ type IntExt = {
   // (which reflect dependencies on variables in scope).
   relName: DL.RelationName,
   intSig: DL.TypedVariable[],
-  // Types in intSig are significant, but names are only for readability.
+    // Types in intSig are significant, but names are only for readability.
   extSig: DL.TypedVariable[],
-  // Both types and names in extSig are significant, as their names bind them
-  // with in-scope variables.
+    // Both types and names in extSig are significant, as their names bind them
+    // with in-scope variables.
 
   // Note: names in intSig and extSig are not necessarily disjoint.
 }
@@ -560,7 +561,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           },
         ],
       };
-    } else if (exp.type === 'literal') {
+    } else if (exp.type === 'constant') {
       const relVar: DL.TypedVariable = { name: 'relVar', type: typeof exp.value === 'string' ? 'symbol' : 'number' };
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
