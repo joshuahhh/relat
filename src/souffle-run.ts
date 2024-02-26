@@ -80,7 +80,6 @@ export async function runSouffle(
   // console.log("calling main took", Date.now() - now);
 
   if (errorLines.length > 0) {
-    console.warn(code);
     throw new Error(`Souffle error: ${errorLines.join('\n')}`);
   }
 
