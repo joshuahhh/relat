@@ -1,19 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { programToString } from "../src/dl.js";
+import { VariableName, programToString } from "../src/dl.js";
 import { Relation, runSouffle } from "../src/souffle-run.js";
 
 describe('dl', () => {
   it('basically works', async () => {
     const isNiceNumber: Relation = { types: ['number'], tuples: [[10], [20]] };
+    const x = 'x' as VariableName;
+    const y = 'y' as VariableName;
     const code = programToString([
-      { type: 'decl', relName: 'isNiceNumber', sig: [{ name: 'x', type: 'number' }] },
+      { type: 'decl', relName: 'isNiceNumber', sig: [{ name: x, type: 'number' }] },
       { type: 'input', relName: 'isNiceNumber' },
-      { type: 'decl', relName: 'isGreatNumber', sig: [{ name: 'x', type: 'number' }] },
+      { type: 'decl', relName: 'isGreatNumber', sig: [{ name: x, type: 'number' }] },
       {
         type: 'rule',
-        head: { relName: 'isGreatNumber', args: ['y'] },
+        head: { relName: 'isGreatNumber', args: [y] },
         body: [
-          { relName: 'isNiceNumber', args: ['x'] },
+          { relName: 'isNiceNumber', args: [x] },
           'y = 2 * x',
         ],
       },

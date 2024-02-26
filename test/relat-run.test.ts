@@ -3,6 +3,78 @@ import { runRelat } from "../src/relat-run.js";
 import { Relation } from "../src/souffle-run.js";
 
 describe("runRelat", () => {
+  it("numeric constants", async () => {
+    const output = await runRelat("100", {});
+    expect(output).toEqual({ types: ["number"], tuples: [[100]] });
+  });
+
+  it("string constants", async () => {
+    const output = await runRelat("'str'", {});
+    expect(output).toEqual({ types: ["symbol"], tuples: [["str"]] });
+  });
+
+  it("relation identifiers", async () => {
+    const rel: Relation = { types: ["number"], tuples: [[100], [200]] };
+    const output = await runRelat("rel", { rel });
+    expect(output).toEqual(rel);
+  });
+
+  it("union", async () => {
+    const rel1: Relation = { types: ["number"], tuples: [[100], [200]] };
+    const rel2: Relation = { types: ["number"], tuples: [[200], [300]] };
+    const output = await runRelat("rel1 ; rel2", { rel1, rel2 });
+    expect(output).toEqual({ types: ["number"], tuples: [[100], [200], [300]] });
+  });
+
+  it("intersection", async () => {
+    const rel1: Relation = { types: ["number"], tuples: [[100], [200]] };
+    const rel2: Relation = { types: ["number"], tuples: [[200], [300]] };
+    const output = await runRelat("rel1 & rel2", { rel1, rel2 });
+    expect(output).toEqual({ types: ["number"], tuples: [[200]] });
+  });
+
+  it("cartesian product", async () => {
+    const rel1: Relation = { types: ["number"], tuples: [[100], [200]] };
+    const rel2: Relation = { types: ["number"], tuples: [[200], [300]] };
+    const output = await runRelat("rel1 , rel2", { rel1, rel2 });
+    expect(output).toEqual({ types: ["number", "number"], tuples: [[100, 200], [100, 300], [200, 200], [200, 300]] });
+  });
+
+  it("silly formulas", async () => {
+    const output = await runRelat("`3 * 4`", {});
+    expect(output).toEqual({ types: ["number"], tuples: [[12]] });
+  });
+
+  it("comprehension", async () => {
+    const rel: Relation = { types: ["number"], tuples: [[100], [200], [300]] };
+    const output = await runRelat("{x : rel | x > 150}", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[200], [300]] });
+  });
+
+  it("comprehension with formula", async () => {
+    const rel: Relation = { types: ["number"], tuples: [[100], [200], [300]] };
+    const output = await runRelat("{x : rel | `x * 3`}", { rel });
+    expect(output).toEqual({ types: ["number", "number"], tuples: [[100, 300], [200, 600], [300, 900]] });
+  });
+
+  it("comprehension with formula and let", async () => {
+    const rel: Relation = { types: ["number"], tuples: [[100], [200], [300]] };
+    const output = await runRelat("{x : rel | let y = `x * 3` | y > 450}", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[200], [300]] });
+  });
+
+  it("some (positive)", async () => {
+    const rel: Relation = { types: ["number"], tuples: [[100]] };
+    const output = await runRelat("some rel", { rel });
+    expect(output).toEqual({ types: [], tuples: [[]] });
+  });
+
+  it("some (negative)", async () => {
+    const rel: Relation = { types: ["number"], tuples: [] };
+    const output = await runRelat("some rel", { rel });
+    expect(output).toEqual({ types: [], tuples: [] });
+  });
+
   it("basically works", async () => {
     const isPerson: Relation = { types: ["number"], tuples: [
       [10], [11], [12], [13], [20], [21], [22], [23], [30]
@@ -36,6 +108,7 @@ describe("runRelat", () => {
       { isPerson, hasChild, isHappy }
     );
     expect(hasChildButNoSadChildren).toEqual({ types: ["number"], tuples: [[10]] })
+  });
 
-  })
+  // TODO: test every single operator, lol
 });

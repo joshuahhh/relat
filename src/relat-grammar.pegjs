@@ -12,9 +12,15 @@ Order of precedence, from tightest to loosest:
 Expression = E1
 
 E1
-  = left:E2 rights:(_ "+" _ right:E2 { return right })*
+  = left:E1b rights:(_ ";" _ right:E1b { return right })*
     // TODO: fix ranges
-    { return rights.reduce((left, right) => ({ type: "binary", op: "+", left, right, range: range() }), left) }
+    { return rights.reduce((left, right) => ({ type: "binary", op: ";", left, right, range: range() }), left) }
+  / E1b
+
+E1b
+  = left:E2 rights:(_ "," _ right:E2 { return right })*
+    // TODO: fix ranges
+    { return rights.reduce((left, right) => ({ type: "binary", op: ",", left, right, range: range() }), left) }
   / E2
 
 E2
@@ -46,18 +52,18 @@ E4
   / E5
 
 E5
-  = "^" _ operand:E5
-  	{ return { type: "unary", op: "^", operand, range: range() } }
-  / "*" _ operand:E5
-  	{ return { type: "unary", op: "*", operand, range: range() } }
-  / "~" _ operand:E5
-  	{ return { type: "unary", op: "~", operand, range: range() } }
+  = left:E6 rights:(_ "." _ right:E6 { return right })*
+    // TODO: fix ranges
+    { return rights.reduce((left, right) => ({ type: "binary", op: ".", left, right, range: range() }), left) }
   / E6
 
 E6
-  = left:E7 rights:(_ "." _ right:E7 { return right })*
-    // TODO: fix ranges
-    { return rights.reduce((left, right) => ({ type: "binary", op: ".", left, right, range: range() }), left) }
+  = "^" _ operand:E7
+  	{ return { type: "unary", op: "^", operand, range: range() } }
+  / "*" _ operand:E7
+  	{ return { type: "unary", op: "*", operand, range: range() } }
+  / "~" _ operand:E7
+  	{ return { type: "unary", op: "~", operand, range: range() } }
   / E7
 
 E7
@@ -68,11 +74,13 @@ E7
   / "{" _ variable:Identifier _ ":" _ constraint:Expression _ "|" _ body:Expression _ "}"
   	{ return { type: "comprehension", variable, constraint, body, range: range() } }
   / number:$([1-9][0-9]*)
-    { return { type: "constant", value: +number, range: range() } }
+    { return { type: "constant", value: Number(number), range: range() } }
   / "'" _ string:$([^']*) _ "'"
   	{ return { type: "constant", value: string, range: range() } }
   / "\"" _ string:$([^"]*) _ "\""
   	{ return { type: "constant", value: string, range: range() } }
+  / "`" _ string:$([^`]*) _ "`"
+  	{ return { type: "formula", formula: string, range: range() } }
   / name:Identifier
   	{ return { type: "identifier", name, range: range() } }
 

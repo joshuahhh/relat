@@ -38,7 +38,7 @@ function parseIntOr(s: string) {
 }
 
 function parseRelation(data: string, types?: Type[]): Relation {
-  const tuples = data.trim().split('\n').map(line => line.split('\t').map(s => parseIntOr(s)));
+const tuples = data.trim().split('\n').map(line => line.split('\t').map(s => parseIntOr(s)));
   if (types) {
     return { types, tuples };
   } else {
@@ -90,10 +90,16 @@ export async function runSouffle(
     // these end with csv but they're actually tsv
     if (filename.endsWith('.csv')) {
       const relationName = filename.slice(0, -4);
-      outputRelations[relationName] =
-        parseRelation(
-          module.FS.readFile(filename, { encoding: 'utf8' })
-        );
+      const contents = module.FS.readFile(filename, { encoding: 'utf8' });
+      if (contents.trim() === '') {
+        // special case: no columns, no rows
+        outputRelations[relationName] = { types: [], tuples: [] };
+      } else if (contents.trim() === '()') {
+        // special case: no columns, one row
+        outputRelations[relationName] = { types: [], tuples: [[]] };
+      } else {
+        outputRelations[relationName] = parseRelation(contents);
+      }
     }
   });
   return outputRelations;

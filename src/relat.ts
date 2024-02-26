@@ -29,7 +29,7 @@ export type Expression<Meta = {range: Range}> = Meta & (
     }
   | {
       type: 'binary',
-      op: '.' | '=' | '<' | '>' | '=<' | '>=' | '+' | '&',
+      op: '.' | '=' | '<' | '>' | '=<' | '>=' | ';' | '&' | ',',
       left: Expression<Meta>,
       right: Expression<Meta>,
     }
@@ -44,6 +44,10 @@ export type Expression<Meta = {range: Range}> = Meta & (
       variable: string,
       value: Expression<Meta>,
       body: Expression<Meta>,
+    }
+  | {
+      type: 'formula',
+      formula: string,
     }
 )
 
@@ -62,6 +66,8 @@ export function stripMeta<Meta>(expr: Expression<Meta>): Expression<{}> {
       return { type: 'comprehension', variable: expr.variable, constraint: stripMeta(expr.constraint), body: stripMeta(expr.body) };
     case 'let':
       return { type: 'let', variable: expr.variable, value: stripMeta(expr.value), body: stripMeta(expr.body) };
+    case 'formula':
+      return { type: 'formula', formula: expr.formula };
     default:
       assertNever(expr);
   }

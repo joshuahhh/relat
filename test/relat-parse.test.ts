@@ -18,8 +18,8 @@ describe("parseRelat", () => {
     ["x =< y", { type: "binary", op: "=<", left: x, right: y }],
     ["x >= y", { type: "binary", op: ">=", left: x, right: y }],
     // E3
-    ["x + y", { type: "binary", op: "+", left: x, right: y }],
-    ["x + y + z", { type: "binary", op: "+", left: { type: "binary", op: "+", left: x, right: y }, right: z }],
+    ["x ; y", { type: "binary", op: ";", left: x, right: y }],
+    ["x ; y ; z", { type: "binary", op: ";", left: { type: "binary", op: ";", left: x, right: y }, right: z }],
     // E4
     ["#x", { type: "unary", op: "#", operand: x }],
     // E4b
@@ -39,11 +39,12 @@ describe("parseRelat", () => {
     ["'str'", { type: "constant", value: "str" }],
     ["\"str\"", { type: "constant", value: "str" }],
     ["iden", { type: "identifier", name: "iden" }],
+    ["`3 * x`", { type: "formula", formula: "3 * x" }],
 
     // compounds
     ["some not x", { type: "unary", op: "some", operand: { type: "unary", op: "not", operand: x } }],
     ["not some x", { type: "unary", op: "not", operand: { type: "unary", op: "some", operand: x } }],
-    ["*x+y", { type: "binary", op: "+", left: { type: "unary", op: "*", operand: x }, right: y }],
+    ["*x;y", { type: "binary", op: ";", left: { type: "unary", op: "*", operand: x }, right: y }],
     ["*x.y", { type: "binary", op: ".", left: { type: "unary", op: "*", operand: x }, right: y }],
     ["#x.y", { type: "unary", op: "#", operand: { type: "binary", op: ".", left: x, right: y } }],
     ["some x.y", { type: "unary", op: "some", operand: { type: "binary", op: ".", left: x, right: y } }],

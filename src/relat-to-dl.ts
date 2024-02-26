@@ -1,111 +1,153 @@
-import * as Relat from './relat.js';
-import * as DL from './dl.js';
-
 import _ from 'lodash';
-import { rangeString } from './relat.js';
 import inspect from 'object-inspect';
+import * as DL from './dl.js';
+import * as Relat from './relat.js';
+import { rangeString } from './relat.js';
+import { assertNever, entries } from './misc.js';
 
-function externalVarByName(myName: DL.VariableName, extSig: DL.TypedVariable[]): DL.TypedVariable | undefined {
-  return extSig.find(({name}) => name === myName);
-}
 
-export function makeNextIndex() {
+export function mkNextIndex() {
   let i = 0;
   return () => { return ++i; }
 }
+
+// a little insight: there's an important distinction between RELAT VARIABLES
+// (like the x in {x : set | exp}) and DATALOG VARIABLES. among other things, in
+// this translation process we must make sure to remember the exact names of
+// RELAT VARIABLES (since they're determined by the input code), but DATALOG
+// VARIABLES need only be consistent within rules!
+
+// We do use Relat variables directly as Datalog variables, for convenience
+// sake.
+
+export type RelatVariable = DL.VariableName & { __RelatVariable: true };
+
+export type RelatVariableBinding =
+  | { type: 'scalar', scalarType: DL.Type }
+      // these come from comprehensions; will become part of extSlots
+  | { type: 'relation', intExt: IntExt }
+      // these come from input relations and `let` bindings
 
 export type Environment = {
   // When you translate a Relat expression, you do so in the context of an
   // Environment.
   nextIndex: () => number,
     // Generator for unique indices.
-  extSig: DL.TypedVariable[],
-    // extSig gives the types of scalar variables in scope. TODO: make this a record?
   constraint: DL.Literal[],
-    // constraint gives literals that constrain variables in extSig. For
+    // constraint gives literals that constrain in-scope variables. For
     // example, if we are translating a subexpression inside a comprehension,
     // then the constraint will be the literals that constrain the comprehension
     // variables. This is important to make sure that all variables are
     // grounded.
-  relScope: Record<string, IntExt>,
-    // relScope gives the types of relations in scope. These relations can come
-    // from input relations or from `let` bindings.
+  scope: Scope,
 }
 
-type IntExt = {
+type Scope = Record<RelatVariable, RelatVariableBinding>;
+
+function getFromScope(varName: RelatVariable, scope: Scope): RelatVariableBinding | undefined {
+  return scope[varName];
+}
+function getScalarTypeFromScope(varName: RelatVariable, scope: Scope): DL.Type {
+  const type = getFromScope(varName, scope);
+  if (!type || type.type !== 'scalar') {
+    throw new Error(`Variable ${varName} not in scope as scalar`);
+  }
+  return type.scalarType;
+}
+function getExtSlots(scope: Scope): RelatVariable[] {
+  return entries(scope)
+    .filter(([_, binding]) => binding.type === 'scalar')
+    .map(([name, _]) => name);
+}
+
+export type IntExt = {
   // IntExt describes a relation with internal arguments (those which are
   // actually semantically arguments of the relation) and external arguments
   // (which reflect dependencies on variables in scope).
   relName: DL.RelationName,
-  intSig: DL.TypedVariable[],
-    // Types in intSig are significant, but names are only for readability.
-  extSig: DL.TypedVariable[],
-    // Both types and names in extSig are significant, as their names bind them
-    // with in-scope variables.
-
-  // Note: names in intSig and extSig are not necessarily disjoint.
+  intSlots: IntSlot[],
+    // `debugName` is purely a hint for producing more legible output.
+  extSlots: RelatVariable[],
+    // These variable names are significant, as they bind the IntExt to in-scope
+    // Relat variables. Types are not included, as they should be available from
+    // the context. Also: these names should all be distinct (per shadowing
+    // rules.)
 }
 
-export type TranslationResult = IntExt & { program: DL.Program }
+type IntSlot = { type: DL.Type, debugName: string };
 
-function mapNames(sig: DL.TypedVariable[], funcOrTemplate: ((name: DL.VariableName) => DL.VariableName) | string): DL.TypedVariable[] {
-  let func: (name: DL.VariableName) => DL.VariableName;
-  if (typeof funcOrTemplate === 'string') {
-    const template = funcOrTemplate;
-    func = (name: DL.VariableName) => template.replace('NAME', name);
-  } else {
-    func = funcOrTemplate;
-  }
-  return sig.map(({name, type}) => ({name: func(name), type}));
-}
-
-function decl({relName, intSig, extSig}: IntExt): DL.Command {
-  return {
-    type: 'decl',
-    relName,
-    sig: [
-      ...mapNames(intSig, "NAME_i"),
-      ...mapNames(extSig, "NAME_e"),
-    ],
-  };
-}
-
-function sigsMatch(sig1: DL.TypedVariable[], sig2: DL.TypedVariable[]): boolean {
-  if (sig1.length !== sig2.length) {
+function slotTypesMatch(slots1: IntSlot[], slots2: IntSlot[]): boolean {
+  if (slots1.length !== slots2.length) {
     return false;
   }
-  for (let i = 0; i < sig1.length; i++) {
-    if (sig1[i].type !== sig2[i].type) {
+  for (let i = 0; i < slots1.length; i++) {
+    if (slots1[i].type !== slots2[i].type) {
       return false;
     }
   }
   return true;
 }
 
-function atom({relName, intSig, extSig}: IntExt, intArgs?: DL.TypedVariable[], extArgs?: DL.TypedVariable[]): DL.Atom {
-  if ((intArgs || extArgs) && !(intArgs && extArgs)) {
-    throw new Error(`Internal and external args must either both be specified or both be omitted`);
-  }
-  intArgs = intArgs || intSig;
-  extArgs = extArgs || extSig;
-  if (!sigsMatch(intSig, intArgs)) {
-    throw new Error(`internal args ${JSON.stringify(intArgs)} does not match ${JSON.stringify(intSig)}`);
-  }
-  if (!sigsMatch(extSig, extArgs)) {
-    throw new Error(`external args ${JSON.stringify(extArgs)} does not match ${JSON.stringify(extSig)}`);
-  }
+// utility: common desire is to generate unique DL vars to go with an IntExt's
+// intSlots. here u go
+type NamedIntSlot = IntSlot & { dlVar: DL.VariableName };
+function nameSlots(intSlots: IntSlot[], nextIndex: () => number): NamedIntSlot[] {
+  return intSlots.map((intSig) => nameSlot(intSig, nextIndex));
+}
+function nameSlot(intSlot: IntSlot, nextIndex: () => number): NamedIntSlot {
+  return { ...intSlot, dlVar: mkDLVarUnsafe(`i_${nextIndex()}_${intSlot.debugName}`) };
+}
 
+// Translating an expression (in an environment) results in both:
+// * an IntExt, which is a relation with internal & external arguments
+// * a program which ensures that the relation reflects the desired expression
+export type TranslationResult = IntExt & { program: DL.Program }
+
+
+function mkDLVarUnsafe(name: string) {
+  return name as DL.VariableName;
+}
+
+function mkDLVar(debugName: string, nextIndex: () => number): DL.VariableName {
+  return mkDLVarUnsafe(`v_${nextIndex()}_${debugName}`);
+}
+
+const unnamedDLVar: DL.VariableName = mkDLVarUnsafe('_');
+
+export function mkRelatVarUnsafe(name: string) {
+  return name as RelatVariable;
+}
+
+// Produce a decl for a fresh IntExt
+function decl({relName, intSlots, extSlots}: IntExt, scope: Scope): DL.Command {
   return {
+    type: 'decl',
     relName,
-    args: names([...intArgs, ...extArgs]),
+    sig: [
+      ...intSlots.map(({ type, debugName }, i) => ({name: mkDLVarUnsafe(`i_${i}_${debugName}`), type})),
+      ...extSlots.map((name) => ({name: mkDLVarUnsafe(`e_${name}`), type: getScalarTypeFromScope(name, scope)})),
+    ],
   };
 }
 
-function names(sig: DL.TypedVariable[]): DL.VariableName[] {
-  return sig.map(({name}) => name);
+type DLVarish = DL.VariableName | { dlVar: DL.VariableName };
+function unDLVarish(v: DLVarish): DL.VariableName {
+  return typeof v === 'string' ? v : v.dlVar;
+}
+function atom(intExt: IntExt, intArgs: DLVarish[]): DL.Atom {
+  const {relName, intSlots, extSlots} = intExt;
+  if (intArgs.length !== intSlots.length) {
+    throw new Error(`Arity mismatch: provided ${intArgs.length} args to relation with ${intSlots.length} intSlots`);
+  }
+  return {
+    relName,
+    args: [...intArgs.map(unDLVarish), ...extSlots]
+  };
 }
 
 export function translate(exp: Relat.Expression, env: Environment): TranslationResult {
+  const nextIndex = mkNextIndex();
+
   try {
     // console.log('translate', rangeString(exp.range), env);
 
@@ -113,29 +155,33 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /**************
        * IDENTIFIER *
        **************/
-      const externalVar = externalVarByName(exp.name, env.extSig);
-      if (externalVar) {
+      const relatVar = mkRelatVarUnsafe(exp.name);
+      const relatVarBinding = getFromScope(relatVar, env.scope);
+      if (!relatVarBinding) {
+        throw new Error(`Unknown identifier: ${exp.name}`);
+      } else if (relatVarBinding.type === 'scalar') {
         const intExt: IntExt = {
           relName: `R${env.nextIndex()}`,
-          intSig: [ externalVar ],
-          extSig: env.extSig,
+          intSlots: [ { type: relatVarBinding.scalarType, debugName: exp.name } ],
+          extSlots: getExtSlots(env.scope),
         }
         return {
           ...intExt,
           program: [
             '',
             `// ${intExt.relName}: ${rangeString(exp.range)} (identifier)`,
-            decl(intExt),
+            decl(intExt, env.scope),
             {
               type: 'rule',
-              head: atom(intExt),
+              head: atom(intExt, [ relatVar ]),
+                // so the provided int var will overlap with an ext var
               body: [ ...env.constraint ],
             }
           ],
         };
-      } else if (exp.name in env.relScope) {
+      } else if (relatVarBinding.type === 'relation') {
         return {
-          ...env.relScope[exp.name],
+          ...relatVarBinding.intExt,
           program: [],
         }
       } else {
@@ -147,25 +193,22 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        ************/
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
-      if (leftResult.intSig.length === 0) {
+      if (leftResult.intSlots.length === 0) {
         throw new Error(`Left-hand side of dot-join must have arity > 0`);
       }
-      if (rightResult.intSig.length === 0) {
+      if (rightResult.intSlots.length === 0) {
         throw new Error(`Right-hand side of dot-join must have arity > 0`);
       }
-      if (_.last(leftResult.intSig)!.type !== _.first(rightResult.intSig)!.type) {
+      if (_.last(leftResult.intSlots)!.type !== _.first(rightResult.intSlots)!.type) {
         throw new Error(`Last argument of left-hand side of dot-join must have same type as first argument of right-hand side`);
       }
-      // names may overlap; rename them
-      const leftSigPrefix = mapNames(leftResult.intSig, "NAME_l");
-      const rightSigPrefix = mapNames(rightResult.intSig, "NAME_r");
+      const leftNamedSlots = nameSlots(leftResult.intSlots, nextIndex);
+      const rightNamedSlots = nameSlots(rightResult.intSlots, nextIndex);
+      const joinNamedSlots = [..._.dropRight(leftNamedSlots, 1), ..._.drop(rightNamedSlots, 1)];
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        intSig: [
-          ..._.dropRight(leftSigPrefix, 1),
-          ..._.drop(rightSigPrefix, 1),
-        ],
-        extSig: env.extSig,
+        intSlots: joinNamedSlots,
+        extSlots: getExtSlots(env.scope),
       };
       return {
         ...intExt,
@@ -174,14 +217,47 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...rightResult.program,
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (dot-join)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, joinNamedSlots),
             body: [
-              atom(leftResult, leftSigPrefix, leftResult.extSig),
-              atom(rightResult, rightSigPrefix, rightResult.extSig),
-              `${_.last(leftSigPrefix)!.name} = ${_.first(rightSigPrefix)!.name}`,
+              atom(leftResult, leftNamedSlots),
+              atom(rightResult, rightNamedSlots),
+              `${_.last(leftNamedSlots)!.dlVar} = ${_.first(rightNamedSlots)!.dlVar}`,
+              ...env.constraint,
+            ],
+          },
+        ],
+      };
+    } else if (exp.type === 'binary' && exp.op === ',') {
+      /*********************
+       * CARTESIAN PRODUCT *
+       *********************/
+      const leftResult = translate(exp.left, env);
+      const rightResult = translate(exp.right, env);
+      const leftNamedSlots = nameSlots(leftResult.intSlots, nextIndex);
+      const rightNamedSlots = nameSlots(rightResult.intSlots, nextIndex);
+      const joinNamedSlots = [...leftNamedSlots, ...rightNamedSlots];
+      const intExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: joinNamedSlots,
+        extSlots: getExtSlots(env.scope),
+      };
+      return {
+        ...intExt,
+        program: [
+          ...leftResult.program,
+          ...rightResult.program,
+          '',
+          `// ${intExt.relName}: ${rangeString(exp.range)} (cartesian product)`,
+          decl(intExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(intExt, joinNamedSlots),
+            body: [
+              atom(leftResult, leftNamedSlots),
+              atom(rightResult, rightNamedSlots),
               ...env.constraint,
             ],
           },
@@ -191,30 +267,36 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /*****************
        * COMPREHENSION *
        *****************/
-      if (exp.variable in env.relScope || externalVarByName(exp.variable, env.extSig)) {
+      const newRelatVar = mkRelatVarUnsafe(exp.variable);
+      const relatVarBinding = getFromScope(newRelatVar, env.scope);
+      if (relatVarBinding) {
         throw new Error(`Variable ${exp.variable} already in scope`);
       }
       const constraintResult = translate(exp.constraint, env);
-      if (constraintResult.intSig.length !== 1) {
+      if (constraintResult.intSlots.length !== 1) {
         throw new Error(`Constraint of comprehension must have arity 1`);
       }
-      const newVariable: DL.TypedVariable = { name: exp.variable, type: constraintResult.intSig[0].type };
+      const newIntSlot: IntSlot = {
+        debugName: exp.variable,
+        type: constraintResult.intSlots[0].type
+      };
       const envForBody: Environment = {
         ...env,
-        extSig: [ ...env.extSig, newVariable ],
         constraint: [
           ...env.constraint,
-          atom(constraintResult, [newVariable], constraintResult.extSig)
+          atom(constraintResult, [newRelatVar])
         ],
+        scope: {
+          ...env.scope,
+          [newRelatVar]: { type: 'scalar', name: newRelatVar, scalarType: newIntSlot.type },
+        },
       };
       const bodyResult = translate(exp.body, envForBody);
+      const bodyNamedSlots = nameSlots(bodyResult.intSlots, nextIndex);
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        intSig: [
-          newVariable,
-          ...bodyResult.intSig,
-        ],
-        extSig: env.extSig,
+        intSlots: [ newIntSlot, ...bodyNamedSlots ],
+        extSlots: getExtSlots(env.scope),
       };
       return {
         ...intExt,
@@ -223,12 +305,12 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...bodyResult.program,
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (comprehension)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, [ newRelatVar, ...bodyNamedSlots ]),
             body: [
-              atom(bodyResult),
+              atom(bodyResult, bodyNamedSlots),
               ...env.constraint,
             ],
           },
@@ -241,24 +323,23 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const operandResult = translate(exp.operand, env);
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        intSig: [],
-        extSig: env.extSig,
+        intSlots: [],
+        extSlots: getExtSlots(env.scope),
       };
+
+      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
       return {
         ...intExt,
         program: [
           ...operandResult.program,
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (some)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, []),
             body: [
-              atom(operandResult,
-                operandResult.intSig.map(({type}) => ({name: '_', type})),
-                operandResult.extSig
-              ),
+              atom(operandResult, operandNamedSlots.map(() => unnamedDLVar)),
               ...env.constraint,
             ]
           },
@@ -271,25 +352,23 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const operandResult = translate(exp.operand, env);
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        intSig: [],
-        extSig: env.extSig,
+        intSlots: [],
+        extSlots: getExtSlots(env.scope),
       };
+      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
       return {
         ...intExt,
         program: [
           ...operandResult.program,
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (not)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, operandNamedSlots),
             body: [
               {
-                ...atom(operandResult,
-                  operandResult.intSig.map(({type}) => ({name: '_', type})),
-                  operandResult.extSig
-                ),
+                ...atom(operandResult, operandNamedSlots.map(() => unnamedDLVar)),
                 negated: true,
               },
               ...env.constraint,
@@ -302,43 +381,46 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        * TRANSITIVE CLOSURE (^ / *) *
        ******************************/
       if (exp.op === '*') {
-        throw new Error(`Reflexive transitive closure (^) not yet implemented`);
+        // TODO: I don't actually know how to handle this; what's the universe?
+        throw new Error(`Reflexive transitive closure (*) not yet implemented`);
       }
       const operandResult = translate(exp.operand, env);
-      if (operandResult.intSig.length !== 2) {
+      if (operandResult.intSlots.length !== 2) {
         throw new Error(`Transitive closure must have arity 2`);
       }
-      if (operandResult.intSig[0].type !== operandResult.intSig[1].type) {
+      if (operandResult.intSlots[0].type !== operandResult.intSlots[1].type) {
         throw new Error(`Transitive closure must have same type for both arguments`);
       }
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        intSig: operandResult.intSig,
-        extSig: env.extSig,
+        intSlots: operandResult.intSlots,
+        extSlots: getExtSlots(env.scope),
       };
+      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
+      const middleVar = mkDLVar('middle', nextIndex);
       return {
         ...intExt,
         program: [
           ...operandResult.program,
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (transitive closure)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           // 1. new relation includes old relation
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, operandNamedSlots),
             body: [
-              atom(operandResult),
+              atom(operandResult, operandNamedSlots),
               ...env.constraint,
             ],
           },
           // 2. new relation includes transitive closure of old relation
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, operandNamedSlots),
             body: [
-              atom(intExt, [ intExt.intSig[0], { name: 'middle', type: intExt.intSig[0].type }, ...intExt.extSig ]),
-              atom(operandResult, [ intExt.intSig[1], { name: 'middle', type: intExt.intSig[0].type }, ...operandResult.extSig ]),
+              atom(intExt, [ operandNamedSlots[0], middleVar ]),
+              atom(operandResult, [ middleVar, operandNamedSlots[1] ]),
               ...env.constraint,
             ],
           },
@@ -349,47 +431,47 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        * TRANSPOSE *
        *************/
       const operandResult = translate(exp.operand, env);
-      if (operandResult.intSig.length !== 2) {
+      if (operandResult.intSlots.length !== 2) {
         throw new Error(`Transpose must have arity 2`);
       }
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        intSig: [ operandResult.intSig[1], operandResult.intSig[0] ],
-        extSig: env.extSig,
+        intSlots: [ operandResult.intSlots[1], operandResult.intSlots[0] ],
+        extSlots: getExtSlots(env.scope),
       };
+      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
       return {
         ...intExt,
         program: [
           ...operandResult.program,
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (transpose)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, [ operandNamedSlots[1], operandNamedSlots[0] ]),
             body: [
-              atom(operandResult, [ intExt.intSig[1], intExt.intSig[0] ], operandResult.extSig),
+              atom(operandResult, operandNamedSlots),
               ...env.constraint,
             ],
           },
         ],
       };
-    } else if (exp.type === 'binary' && exp.op === '+') {
+    } else if (exp.type === 'binary' && exp.op === ';') {
       /*********
        * UNION *
        *********/
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
-      if (!sigsMatch(leftResult.intSig, rightResult.intSig)) {
-        throw new Error(`Relations in union must have matching signatures, but got ${inspect(leftResult.intSig)} and ${inspect(rightResult.intSig)}`);
+      if (!slotTypesMatch(leftResult.intSlots, rightResult.intSlots)) {
+        throw new Error(`Relations in union must have matching signatures, but got ${inspect(leftResult.intSlots)} and ${inspect(rightResult.intSlots)}`);
       }
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        // TODO: this prefixing is a stop-gap; I need a more principled way of avoiding name collisions!
-        intSig: mapNames(leftResult.intSig, 'NAME_'),
-        // TODO: union extSigs
-        extSig: env.extSig,
+        intSlots: leftResult.intSlots,  // TODO: debugName from left? meh why not
+        extSlots: getExtSlots(env.scope),
       };
+      const namedSlots = nameSlots(intExt.intSlots, nextIndex);
       return {
         ...intExt,
         program: [
@@ -397,20 +479,20 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...rightResult.program,
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (union)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, namedSlots),
             body: [
-              atom(leftResult, intExt.intSig, leftResult.extSig),
+              atom(leftResult, namedSlots),
               ...env.constraint,
             ],
           },
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, namedSlots),
             body: [
-              atom(rightResult, intExt.intSig, rightResult.extSig),
+              atom(rightResult, namedSlots),
               ...env.constraint,
             ],
           },
@@ -422,16 +504,15 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        ****************/
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
-      if (!sigsMatch(leftResult.intSig, rightResult.intSig)) {
-        throw new Error(`Relations in intersection must have matching signatures, but got ${inspect(leftResult.intSig)} and ${inspect(rightResult.intSig)}`);
+      if (!slotTypesMatch(leftResult.intSlots, rightResult.intSlots)) {
+        throw new Error(`Relations in intersection must have matching signatures, but got ${inspect(leftResult.intSlots)} and ${inspect(rightResult.intSlots)}`);
       }
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        // TODO: this prefixing is a stop-gap; I need a more principled way of avoiding name collisions!
-        intSig: mapNames(leftResult.intSig, 'NAME_'),
-        // TODO: union extSigs
-        extSig: env.extSig,
+        intSlots: leftResult.intSlots,  // TODO: debugName from left? meh why not
+        extSlots: getExtSlots(env.scope),
       };
+      const namedSlots = nameSlots(intExt.intSlots, nextIndex);
       return {
         ...intExt,
         program: [
@@ -439,13 +520,13 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...rightResult.program,
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (intersection)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, namedSlots),
             body: [
-              atom(leftResult, intExt.intSig, leftResult.extSig),
-              atom(rightResult, intExt.intSig, rightResult.extSig),
+              atom(leftResult, namedSlots),
+              atom(rightResult, namedSlots),
               ...env.constraint,
             ],
           },
@@ -455,15 +536,17 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /*******
        * LET *
        *******/
-      if (exp.variable in env.relScope || externalVarByName(exp.variable, env.extSig)) {
+      const newRelatVar: RelatVariable = mkRelatVarUnsafe(exp.variable);
+      const relatVarBinding = getFromScope(newRelatVar, env.scope);
+      if (relatVarBinding) {
         throw new Error(`Variable ${exp.variable} already in scope`);
       }
       const valueResult = translate(exp.value, env);
       const envForBody: Environment = {
         ...env,
-        relScope: {
-          ...env.relScope,
-          [exp.variable]: valueResult,
+        scope: {
+          ...env.scope,
+          [exp.variable]: { type: 'relation', name: newRelatVar, intExt: valueResult },
         },
       };
       const bodyResult = translate(exp.body, envForBody);
@@ -479,11 +562,15 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        * COUNT *
        *********/
       const operandResult = translate(exp.operand, env);
-      const newVariable: DL.TypedVariable = { name: 'cnt', type: 'number' };
+      const countNamedSlot: NamedIntSlot = {
+        dlVar: mkDLVar('count', nextIndex),
+        type: 'number',
+        debugName: 'count',
+      };
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        intSig: [ newVariable ],
-        extSig: env.extSig,
+        intSlots: [ countNamedSlot ],
+        extSlots: getExtSlots(env.scope),
       };
       return {
         ...intExt,
@@ -491,16 +578,14 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...operandResult.program,
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (count)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, [ countNamedSlot ]),
             body: [
               {
-                ...atom(operandResult,
-                  operandResult.intSig.map(({type}) => ({name: '_', type})),
-                  operandResult.extSig),
-                counting: newVariable.name,
+                ...atom(operandResult, operandResult.intSlots.map(() => unnamedDLVar)),
+                counting: countNamedSlot.dlVar,
               },
               ...env.constraint,
             ]
@@ -513,20 +598,22 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        ***************/
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
-      if (leftResult.intSig.length !== 1) {
+      if (leftResult.intSlots.length !== 1) {
         throw new Error(`Left-hand side of scalar operator must have arity 1`);
       }
-      if (rightResult.intSig.length !== 1) {
+      if (rightResult.intSlots.length !== 1) {
         throw new Error(`Right-hand side of scalar operator must have arity 1`);
       }
-      // TODO: type-checking of left and right sides
+      if (leftResult.intSlots[0].type !== rightResult.intSlots[0].type) {
+        throw new Error(`Scalar operator must have matching types on both sides`);
+      }
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        intSig: [ ],
-        extSig: env.extSig,
+        intSlots: [ ],
+        extSlots: getExtSlots(env.scope),
       };
-      const leftVar = {name: 'leftVar', type: leftResult.intSig[0].type};
-      const rightVar = {name: 'rightVar', type: rightResult.intSig[0].type};
+      const leftVar = mkDLVar('left', nextIndex);
+      const rightVar = mkDLVar('right', nextIndex);
       const souffleOperator = {
         '=': '=',
         '<': '<',
@@ -541,52 +628,76 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...rightResult.program,
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (comparison)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt),
+            head: atom(intExt, [ ]),
             body: [
-              {
-                ...atom(leftResult,
-                  [ leftVar ],
-                  leftResult.extSig),
-               },
-               {
-                ...atom(rightResult,
-                  [ rightVar ],
-                  rightResult.extSig),
-               },
-               `(${leftVar.name} ${souffleOperator} ${rightVar.name})`,
+              atom(leftResult, [ leftVar ]),
+              atom(rightResult, [ rightVar ]),
+               `(${leftVar} ${souffleOperator} ${rightVar})`,
               ...env.constraint,
             ]
           },
         ],
       };
     } else if (exp.type === 'constant') {
-      const relVar: DL.TypedVariable = { name: 'relVar', type: typeof exp.value === 'string' ? 'symbol' : 'number' };
+      /************
+       * CONSTANT *
+       ************/
+      const namedSlot = nameSlot({
+        debugName: 'constant', type: typeof exp.value === 'string' ? 'symbol' : 'number' },
+        nextIndex
+      );
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        intSig: [ relVar ],
-        extSig: [ ],
+        intSlots: [ namedSlot ],
+        extSlots: [ ],
       };
       return {
         ...intExt,
         program: [
           '',
           `// ${intExt.relName}: ${rangeString(exp.range)} (literal)`,
-          decl(intExt),
+          decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, [ relVar ], [ ]),
+            head: atom(intExt, [ namedSlot ]),
             body: [
-              `(${relVar.name} = ${typeof exp.value === 'string' ? `"${exp.value}"` : exp.value})`,
+              `(${namedSlot.dlVar} = ${typeof exp.value === 'string' ? `"${exp.value}"` : exp.value})`,
+            ],
+          },
+        ],
+      };
+    } if (exp.type === 'formula') {
+      /***********
+       * FORMULA *
+       ***********/
+      // TODO: guess we're assuming it's a number? hmmmmm
+      const namedSlot = nameSlot({debugName: 'formula', type: 'number' }, nextIndex);
+      const intExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: [ namedSlot ],
+        extSlots: getExtSlots(env.scope),
+      };
+      return {
+        ...intExt,
+        program: [
+          '',
+          `// ${intExt.relName}: ${rangeString(exp.range)} (formula)`,
+          decl(intExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(intExt, [ namedSlot ]),
+            body: [
+              `(${namedSlot.dlVar} = ${exp.formula})`,
+              ...env.constraint,
             ],
           },
         ],
       };
     } else {
-      // const _exhaustiveCheck: never = exp;
-      // void(_exhaustiveCheck);
+      // assertNever(exp);
       throw new Error(`Unexpected expression (${JSON.stringify(exp)})`);
     }
   } catch (e) {
@@ -597,19 +708,15 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
   }
 }
 
-export function translationResultToFullProgram(result: TranslationResult, inputRelSigs: Record<string, DL.TypedVariable[]>): DL.Program {
+export function translationResultToFullProgram(
+  result: TranslationResult,
+  scope: Record<RelatVariable, RelatVariableBinding & {type: 'relation'}>
+): DL.Program {
   return [
-    ...Object.entries(inputRelSigs).flatMap(([relName, sig]) => [
-      {
-        type: 'decl',
-        relName,
-        sig,
-      },
-      {
-        type: 'input',
-        relName,
-      },
-    ] satisfies DL.Command[]),
+    ...entries(scope).flatMap(([relName, { intExt }]) => [
+      decl(intExt, {}),
+      { type: 'input', relName } satisfies DL.Command,
+    ]),
     '',
     ...result.program,
     '',
