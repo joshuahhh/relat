@@ -1,6 +1,6 @@
 import _ from "lodash";
-import { Relation, inferTypes, runSouffle } from "./dl-run.js";
-import { parse } from "./relat-parse.js";
+import { Relation, inferTypes, runSouffle } from "./souffle-run.js";
+import { parseRelat } from "./relat-parse.js";
 import { makeNextIndex, translate, translationResultToFullProgram } from "./relat-to-dl.js";
 import { programToString } from "./dl.js";
 
@@ -10,7 +10,7 @@ export async function runRelat(code: string, inputs: Record<string, Relation | a
   const inputRelSigs = _.mapValues(inputRelations, (relation, relName) => relation.types.map((type, i) => ({name: `${relName}${i}`, type})));
 
   const result = translate(
-    parse(code),
+    parseRelat(code),
     {
       extSig: [],
       constraint: [],
@@ -26,7 +26,7 @@ export async function runRelat(code: string, inputs: Record<string, Relation | a
 
   // console.log(programString)
 
-  const output = await runSouffle(programString, inputs, {souffleWasmPath: 'http://localhost:5176/souffle.wasm'})
+  const output = await runSouffle(programString, inputs)
 
   return output[result.relName]
 }

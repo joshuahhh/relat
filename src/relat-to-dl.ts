@@ -3,6 +3,7 @@ import * as DL from './dl.js';
 
 import _ from 'lodash';
 import { rangeString } from './relat.js';
+import inspect from 'object-inspect';
 
 function externalVarByName(myName: DL.VariableName, extSig: DL.TypedVariable[]): DL.TypedVariable | undefined {
   return extSig.find(({name}) => name === myName);
@@ -380,7 +381,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (!sigsMatch(leftResult.intSig, rightResult.intSig)) {
-        throw new Error(`Relations in union must have matching signatures`);
+        throw new Error(`Relations in union must have matching signatures, but got ${inspect(leftResult.intSig)} and ${inspect(rightResult.intSig)}`);
       }
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
@@ -422,7 +423,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (!sigsMatch(leftResult.intSig, rightResult.intSig)) {
-        throw new Error(`Relations in intersection must have matching signatures`);
+        throw new Error(`Relations in intersection must have matching signatures, but got ${inspect(leftResult.intSig)} and ${inspect(rightResult.intSig)}`);
       }
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,

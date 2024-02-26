@@ -1,9 +1,10 @@
+import { Type } from './souffle-types.js';
+
+
 // dl is an AST format for Datalog targetting Souffle
 
 export type RelationName = string;
 export type VariableName = string;
-
-export type Type = 'symbol' | 'number';
 
 export type TypedVariable = {
   name: VariableName,
