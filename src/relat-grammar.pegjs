@@ -52,6 +52,11 @@ E4
   / E5
 
 E5
+  = left:E5b rights:(_ "[" _ right:Expression _ "]" { return right })*
+    { return rights.reduce((left, right) => ({ type: "binary", op: "[]", left, right, range: range() }), left) }
+  / E5b
+
+E5b
   = left:E6 rights:(_ "." _ right:E6 { return right })*
     // TODO: fix ranges
     { return rights.reduce((left, right) => ({ type: "binary", op: ".", left, right, range: range() }), left) }

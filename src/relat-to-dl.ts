@@ -1,4 +1,4 @@
-import _ from 'lodash';
+import _, { result } from 'lodash';
 import inspect from 'object-inspect';
 import * as DL from './dl.js';
 import * as Relat from './relat.js';
@@ -527,6 +527,44 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             body: [
               atom(leftResult, namedSlots),
               atom(rightResult, namedSlots),
+              ...env.constraint,
+            ],
+          },
+        ],
+      };
+    } else if (exp.type === 'binary' && exp.op === '[]') {
+      /***************
+       * APPLICATION *
+       ***************/
+      const leftResult = translate(exp.left, env);
+      const rightResult = translate(exp.right, env);
+      if (leftResult.intSlots.length < rightResult.intSlots.length) {
+        throw new Error(`Cannot apply relation with ${rightResult.intSlots.length} arguments to relation with ${leftResult.intSlots.length} arguments`);
+      }
+      if (!slotTypesMatch(leftResult.intSlots.slice(0, rightResult.intSlots.length), rightResult.intSlots)) {
+        throw new Error(`Cannot apply relation with signature ${inspect(rightResult.intSlots)} to relation with signature ${inspect(leftResult.intSlots)}`);
+      }
+      const leftNamedSlots = nameSlots(leftResult.intSlots, nextIndex);
+      const resultNamedSlots = leftNamedSlots.slice(rightResult.intSlots.length);
+      const intExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: resultNamedSlots,
+        extSlots: getExtSlots(env.scope),
+      };
+      return {
+        ...intExt,
+        program: [
+          ...leftResult.program,
+          ...rightResult.program,
+          '',
+          `// ${intExt.relName}: ${rangeString(exp.range)} (application)`,
+          decl(intExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(intExt, resultNamedSlots),
+            body: [
+              atom(leftResult, leftNamedSlots),
+              atom(rightResult, leftNamedSlots.slice(0, rightResult.intSlots.length)),
               ...env.constraint,
             ],
           },

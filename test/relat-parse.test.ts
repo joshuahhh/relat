@@ -8,6 +8,9 @@ describe("parseRelat", () => {
   const z: Expression<{}> = { type: "identifier", name: "z" };
 
   const expectedParsings: [string, Expression<{}>][] = [
+    // TODO: these used to be in correct precedence group but then we reordered
+    // precedence. idk.
+
     // E1
     ["some x", { type: "unary", op: "some", operand: x }],
     ["not x", { type: "unary", op: "not", operand: x }],
@@ -40,6 +43,8 @@ describe("parseRelat", () => {
     ["\"str\"", { type: "constant", value: "str" }],
     ["iden", { type: "identifier", name: "iden" }],
     ["`3 * x`", { type: "formula", formula: "3 * x" }],
+    // NEW
+    ["x[y]", { type: "binary", op: "[]", left: x, right: y }],
 
     // compounds
     ["some not x", { type: "unary", op: "some", operand: { type: "unary", op: "not", operand: x } }],
@@ -49,6 +54,11 @@ describe("parseRelat", () => {
     ["#x.y", { type: "unary", op: "#", operand: { type: "binary", op: ".", left: x, right: y } }],
     ["some x.y", { type: "unary", op: "some", operand: { type: "binary", op: ".", left: x, right: y } }],
     ["some x & y", { type: "binary", op: "&", left: { type: "unary", op: "some", operand: x }, right: y }],
+    ["x[y.z]", { type: "binary", op: "[]", left: x, right: { type: "binary", op: ".", left: y, right: z } }],
+    ["x[y;z]", { type: "binary", op: "[]", left: x, right: { type: "binary", op: ";", left: y, right: z } }],
+    ["some x[y]", { type: "unary", op: "some", operand: { type: "binary", op: "[]", left: x, right: y } }],
+    ["x.y[z]", { type: "binary", op: "[]", left: { type: "binary", op: ".", left: x, right: y }, right: z }],
+    ["x[y][z]", { type: "binary", op: "[]", left: { type: "binary", op: "[]", left: x, right: y }, right: z }],
   ];
 
   for (const [input, expected] of expectedParsings) {

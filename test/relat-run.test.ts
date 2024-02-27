@@ -3,6 +3,9 @@ import { runRelat } from "../src/relat-run.js";
 import { Relation } from "../src/souffle-run.js";
 
 describe("runRelat", () => {
+  const TRUE: Relation = { types: [], tuples: [[]] };
+  const FALSE: Relation = { types: [], tuples: [] };
+
   it("numeric constants", async () => {
     const output = await runRelat("100", {});
     expect(output).toEqual({ types: ["number"], tuples: [[100]] });
@@ -66,13 +69,41 @@ describe("runRelat", () => {
   it("some (positive)", async () => {
     const rel: Relation = { types: ["number"], tuples: [[100]] };
     const output = await runRelat("some rel", { rel });
-    expect(output).toEqual({ types: [], tuples: [[]] });
+    expect(output).toEqual(TRUE);
   });
 
   it("some (negative)", async () => {
     const rel: Relation = { types: ["number"], tuples: [] };
     const output = await runRelat("some rel", { rel });
-    expect(output).toEqual({ types: [], tuples: [] });
+    expect(output).toEqual(FALSE);
+  });
+
+  it("application, single argument", async () => {
+    const rel: Relation = { types: ["number", "number"], tuples: [[100, 1], [200, 2]] };
+    const output = await runRelat("rel[100]", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[1]] });
+  });
+
+  it("application, union argument", async () => {
+    const rel: Relation = { types: ["number", "number"], tuples: [[100, 1], [200, 2]] };
+    const output = await runRelat("rel[150; 200]", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[2]] });
+  });
+
+  it("application, product argument", async () => {
+    const rel: Relation = { types: ["number", "number"], tuples: [[100, 1], [200, 2]] };
+    const output1 = await runRelat("rel[100, 1]", { rel });
+    expect(output1).toEqual(TRUE);
+    const output2 = await runRelat("rel[100, 2]", { rel });
+    expect(output2).toEqual(FALSE);
+  });
+
+  it("application, repeated", async () => {
+    const rel: Relation = { types: ["number", "number"], tuples: [[100, 1], [200, 2]] };
+    const output1 = await runRelat("rel[100][1]", { rel });
+    expect(output1).toEqual(TRUE);
+    const output2 = await runRelat("rel[100][2]", { rel });
+    expect(output2).toEqual(FALSE);
   });
 
   it("basically works", async () => {
