@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runRelat } from "../src/relat-run.js";
 import { Relation } from "../src/souffle-run.js";
+import { simpleFamily } from "../src/client/scenarios.js";
 
 describe("runRelat", () => {
   const TRUE: Relation = { types: [], tuples: [[]] };
@@ -114,39 +115,33 @@ describe("runRelat", () => {
   });
 
   it("basically works", async () => {
-    const isPerson: Relation = { types: ["number"], tuples: [
-      [10], [11], [12], [13], [20], [21], [22], [23], [30]
-    ] };
-    const hasChild: Relation = { types: ["number", "number"], tuples: [
-      [10, 11],
-      [10, 12],
-      [10, 13],
-      [20, 21],
-      [20, 22],
-      [20, 23]
-    ] };
-    const isHappy: Relation = { types: ["number"], tuples: [
-      [11], [12], [13], [21], [22]
-    ] };
-
     const hasChildRoundAbout = await runRelat(
       `{x : isPerson | some x.hasChild}`,
-      { isPerson, hasChild, isHappy }
+      simpleFamily.inputs
     );
-    expect(hasChildRoundAbout).toEqual({ types: ["number"], tuples: [[10], [20]] })
+    expect(hasChildRoundAbout).toEqual({ types: ["number"], tuples: [[10], [20]] });
 
     const hasSadChild = await runRelat(
       `{x : isPerson | some {y : x.hasChild | not y.isHappy}}`,
-      { isPerson, hasChild, isHappy }
+      simpleFamily.inputs
     );
-    expect(hasSadChild).toEqual({ types: ["number"], tuples: [[20]] })
+    expect(hasSadChild).toEqual({ types: ["number"], tuples: [[20]] });
 
     const hasChildButNoSadChildren = await runRelat(
       `{x : isPerson | (some x.hasChild) & (not some {y : x.hasChild | not y.isHappy})}`,
-      { isPerson, hasChild, isHappy }
+      simpleFamily.inputs
     );
-    expect(hasChildButNoSadChildren).toEqual({ types: ["number"], tuples: [[10]] })
+    expect(hasChildButNoSadChildren).toEqual({ types: ["number"], tuples: [[10]] });
   });
+
+  it.fails("continues to work", async () => {
+    const hasSadChild2 = await runRelat(
+      `{ x : isPerson | #x.hasChild > #x.hasChild.isHappy }`,
+      simpleFamily.inputs
+    );
+    expect(hasSadChild2).toEqual({ types: ["number"], tuples: [[20]] });
+  });
+
 
   // TODO: test every single operator, lol
 });

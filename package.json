@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@tailwindcss/typography": "0.5.10",
+    "@types/d3-dsv": "^3.0.7",
     "@types/emscripten": "1.39.10",
     "@types/eslint": "^8.56.4",
     "@types/lodash": "^4.14.194",
@@ -38,6 +39,7 @@
   },
   "dependencies": {
     "clsx": "2.1.0",
+    "d3-dsv": "3.0.1",
     "lodash": "^4.17.21",
     "object-inspect": "~1.12.1",
     "peggy": "^3.0.2",

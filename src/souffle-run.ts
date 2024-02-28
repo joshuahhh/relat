@@ -1,4 +1,4 @@
-import { Type } from './souffle-types.js';
+import { type Type } from './souffle-types.js';
 import loadSouffleModule from './souffle-emscripten/souffle.js';
 import souffleWasmStr from './souffle-emscripten/souffle.wasm.js';
 

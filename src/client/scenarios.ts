@@ -9,14 +9,16 @@ export type Scenario = {
   }[],
 }
 
-export const scenarios: Scenario[] = [{
+export const movies: Scenario = {
   name: "Movies",
   inputs: {},
   examples: [{
     description: "all movies",
     code: "movie"
   }],
-}, {
+};
+
+export const simpleFamily: Scenario = {
   name: "Simple family",
   inputs: {
     isPerson: { types: ["number"], tuples: [
@@ -44,4 +46,9 @@ export const scenarios: Scenario[] = [{
     description: "how many children does each parent have?",
     code: "{x : isPerson | let cnt = #x.hasChild | cnt > 0, cnt}",
   }],
-}];
+};
+
+export const scenarios: Scenario[] = [
+  movies,
+  simpleFamily,
+];
