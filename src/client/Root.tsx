@@ -1,13 +1,13 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import _ from 'lodash';
+import { memo, useEffect, useState } from 'react';
+import { programToString } from '../dl.js';
 import { entries, fromEntries } from '../misc.js';
+import { SyntaxError } from '../relat-grammar/relat-grammar.js';
 import { parseRelat } from '../relat-parse.js';
+import { runRelat } from '../relat-run.js';
 import { Environment, IntExt, RelatVariable, RelatVariableBinding, mkNextIndex, mkRelatVarUnsafe, translate, translationResultToFullProgram } from '../relat-to-dl.js';
 import { stripMeta, toSexpr } from '../relat.js';
 import { Relation, inferTypes } from '../souffle-run.js';
-import _ from 'lodash';
-import { programToString } from '../dl.js';
-import { runRelat } from '../relat-run.js';
-import { SyntaxError } from '../relat-grammar.js';
 
 const isPerson: Relation = { types: ["number"], tuples: [
   [10], [11], [12], [13], [20], [21], [22], [23], [30]
