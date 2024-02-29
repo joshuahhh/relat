@@ -1,5 +1,5 @@
 import * as Relat from './relat.js';
-import { parse, SyntaxError } from './relat-grammar.js'
+import { parse, SyntaxError } from './relat-grammar/relat-grammar.js'
 
 export function parseRelat(input: string): Relat.Expression {
   try {
