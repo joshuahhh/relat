@@ -72,11 +72,11 @@ export const Root = memo(() => {
     <div className="flex flex-row gap-10 h-1/3">
       <div>
         <h1 className='text-5xl'>relat</h1>
-        <div className='h-4'/>
+        <div className='h-2'/>
         {scenarios.map((s, i) =>
           <button key={i}
             className={clsx(
-              'block text-[#646cff] hover:text-[#535bf2] text-left',
+              'block text-[#646cff] hover:text-[#535bf2] text-left whitespace-nowrap',
               s === scenario && 'font-bold'
             )}
             onClick={() => {
@@ -88,15 +88,16 @@ export const Root = memo(() => {
           </button>
         )}
       </div>
-      <div className='flex flex-row gap-10 overflow-x-scroll'>
-        {entries(scenario.inputs).map(([name, relation]) =>
+      <div className='flex flex-row overflow-x-scroll'>
+        {entries(scenario.inputs).map(([name, relation]) => <>
           <div key={name} className="flex flex-col items-start w-fit">
             <h3 className='text-lg font-bold'>{name}</h3>
             <div className='overflow-y-scroll w-fit'>
               <RelationView relation={relation} />
             </div>
           </div>
-        )}
+          <div className='bg-gray-500 min-w-px h-full mx-2'/>
+        </>)}
       </div>
     </div>
     <hr className='min-h-px my-4 bg-gray-500 border-0'/>
@@ -149,7 +150,7 @@ export const Root = memo(() => {
         ? <p>processing...</p>
         : <details>
             <summary>
-              <pre style={{display: 'inline-block'}}>
+              <pre className='inline-block'>
                 {toSexpr(lastGoodProcessed.ast)}
               </pre>
             </summary>
@@ -162,7 +163,7 @@ export const Root = memo(() => {
         <h2 className='text-xl font-bold'>generated Datalog</h2>
         { lastGoodProcessed === null
         ? <p>processing...</p>
-        : <div style={{overflow: 'auto'}}>
+        : <div className="overflow-auto">
             <DatalogView program={programToString(lastGoodProcessed.translated.program)} />
           </div>
         }
@@ -207,7 +208,7 @@ const RelationView = memo(({ relation }: { relation: Relation }) => {
         {tuplesToShow.map((row, i) =>
           <tr key={i}>
             {row.map((value, j) =>
-              <td key={j} className='px-1 align-top'
+              <td key={j} className='px-1 align-top whitespace-nowrap'
                 style={{borderBottom: '1px solid hsl(0, 0%, 20%)', ...j > 0 && {borderLeft: '1px solid hsl(0, 0%, 50%)'}}}>
                 {"" + value}
               </td>
