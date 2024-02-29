@@ -25,7 +25,7 @@ async function main() {
   const hasRating = titleAnd("Rating")
   const hasRevenueMil = titleAnd("Revenue (Millions)")
 
-  await fsP.writeFile(new URL("movies-input.json", import.meta.url), stringify({
+  await fsP.writeFile(new URL("movies-inputs.json", import.meta.url), stringify({
     isTitle, hasGenre, hasActor, hasDirector, hasYear, hasRuntimeMin, hasRating, hasRevenueMil
   }));
 };
