@@ -1,3 +1,4 @@
+import { assertNever } from './misc.js';
 import { type Type } from './souffle-types.js';
 
 
@@ -33,13 +34,16 @@ export type Literal =
     & Atom
     & {
         negated?: boolean,
-        // This is the one aggregate we support so far, "count". For simplicity,
-        // we only apply it to a single relation at a time. (This doesn't limit
-        // expressivity.)
-        counting?: VariableName,
+        // For simplicity, we only apply aggregates to a single relation at a
+        // time. (This doesn't limit expressivity.)
+        aggregate?: Aggregate,
       }
     )
   | string  // raw Souffle code; used for constraints
+
+export type Aggregate =
+  | { type: 'count', output: VariableName }
+  | { type: 'min' | 'max' | 'sum', input: VariableName, output: VariableName }
 
 export type Command =
   | { type: 'rule' } & Rule
@@ -89,11 +93,20 @@ function literalToString(lit: Literal): string {
   if (typeof lit === 'string') {
     return lit;
   }
-  if (lit.counting) {
+  if (lit.aggregate) {
     if (lit.negated) {
-      throw new Error(`Can't negate a counting literal`);
+      throw new Error(`Can't negate an aggregate literal`);
     }
-    return `${lit.counting} = count : { ${atomToString(lit)} }`;
+    switch (lit.aggregate.type) {
+      case 'count':
+        return `${lit.aggregate.output} = count : { ${atomToString(lit)} }`;
+      case 'min':
+      case 'max':
+      case 'sum':
+        return `${lit.aggregate.output} = ${lit.aggregate.type} ${lit.aggregate.input} : { ${atomToString(lit)} }`;
+      default:
+        assertNever(lit.aggregate);
+    }
   }
   return `${lit.negated ? '! ' : ''}${atomToString(lit)}`;
 }

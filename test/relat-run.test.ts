@@ -114,6 +114,30 @@ describe("runRelat", () => {
     expect(output).toEqual({ types: ["number"], tuples: [[100]] });
   });
 
+  it("min", async () => {
+    const rel: Relation = { types: ["symbol", "number"], tuples: [["x", 100], ["y", 100], ["z", 200]] };
+    const output = await runRelat("min rel", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[100]] });
+  });
+
+  it("max", async () => {
+    const rel: Relation = { types: ["symbol", "number"], tuples: [["x", 100], ["y", 100], ["z", 200]] };
+    const output = await runRelat("max rel", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[200]] });
+  });
+
+  it("sum", async () => {
+    const rel: Relation = { types: ["symbol", "number"], tuples: [["x", 100], ["y", 100], ["z", 200]] };
+    const output = await runRelat("Σrel", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[400]] });
+  });
+
+  it("empty sum", async () => {
+    const rel: Relation = { types: ["symbol", "number"], tuples: [] };
+    const output = await runRelat("Σrel", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[0]] });
+  });
+
   it("basically works", async () => {
     const hasChildRoundAbout = await runRelat(
       `{x : isPerson | some x.hasChild}`,

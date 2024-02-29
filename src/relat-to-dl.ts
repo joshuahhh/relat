@@ -666,7 +666,51 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             body: [
               {
                 ...atom(operandResult, operandResult.intSlots.map(() => unnamedDLVar)),
-                counting: countNamedSlot.dlVar,
+                aggregate: { type: 'count', output: countNamedSlot.dlVar },
+              },
+              ...env.constraint,
+            ]
+          },
+        ],
+      };
+    } else if (exp.type === 'unary' && (exp.op === 'min' || exp.op === 'max' || exp.op === 'sum')) {
+      /***************
+       * MIN/MAX/SUM *
+       ***************/
+      const operandResult = translate(exp.operand, env);
+      if (operandResult.intSlots.length === 0) {
+        throw new Error(`Cannot ${exp.op} relation with arity 0`);
+      }
+      const inputNamedSlot: NamedIntSlot = nameSlot(operandResult.intSlots[operandResult.intSlots.length - 1], nextIndex)
+      if (inputNamedSlot.type !== 'number') {
+        throw new Error(`Cannot ${exp.op} relation with non-number last argument`);
+      }
+      const outputNamedSlot: NamedIntSlot = {
+        dlVar: mkDLVar(exp.op, nextIndex),
+        type: 'number',
+        debugName: exp.op,
+      };
+      const intExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: [ outputNamedSlot ],
+        extSlots: getExtSlots(env.scope),
+      };
+      return {
+        ...intExt,
+        program: [
+          ...operandResult.program,
+          '',
+          `// ${intExt.relName}: ${rangeString(exp.range)} (count)`,
+          decl(intExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(intExt, [ outputNamedSlot ]),
+            body: [
+              {
+                ...atom(operandResult, operandResult.intSlots.map((_, i) =>
+                  i < operandResult.intSlots.length - 1 ? unnamedDLVar : inputNamedSlot
+                )),
+                aggregate: { type: exp.op, input: inputNamedSlot.dlVar, output: outputNamedSlot.dlVar },
               },
               ...env.constraint,
             ]

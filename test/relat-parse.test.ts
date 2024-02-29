@@ -46,6 +46,10 @@ describe("parseRelat", () => {
     // NEW
     ["x[y]", { type: "binary", op: "[]", left: x, right: y }],
     ["x-y", { type: "binary", op: "-", left: x, right: y }],
+    ["min x", { type: "unary", op: "min", operand: x }],
+    ["max x", { type: "unary", op: "max", operand: x }],
+    ["sum x", { type: "unary", op: "sum", operand: x }],
+    ["Σx", { type: "unary", op: "sum", operand: x }],
 
     // compounds
     ["some not x", { type: "unary", op: "some", operand: { type: "unary", op: "not", operand: x } }],
@@ -61,6 +65,7 @@ describe("parseRelat", () => {
     ["x.y[z]", { type: "binary", op: "[]", left: { type: "binary", op: ".", left: x, right: y }, right: z }],
     ["x[y][z]", { type: "binary", op: "[]", left: { type: "binary", op: "[]", left: x, right: y }, right: z }],
     ["x-y-z", {type: "binary", op: "-", left: { type: "binary", op: "-", left: x, right: y }, right: z }],
+    ["Σ x.y", { type: "unary", op: "sum", operand: { type: "binary", op: ".", left: x, right: y } }],
   ];
 
   for (const [input, expected] of expectedParsings) {
