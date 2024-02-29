@@ -1,9 +1,9 @@
-import { Type } from './souffle-types.js';
+import { type Type } from './souffle-types.js';
 
 
 // dl is an AST format for Datalog targetting Souffle
 
-export { Type } from './souffle-types.js';
+export { type Type } from './souffle-types.js';
 
 export type RelationName = string;
 export type VariableName = string & { __VariableName: true };

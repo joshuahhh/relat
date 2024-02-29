@@ -9,6 +9,8 @@ Order of precedence, from tightest to loosest:
 
 // This should go in order from loosest to tightest
 
+Start = _ exp:Expression _ { return exp }
+
 Expression = E1
 
 E1

@@ -1,4 +1,4 @@
-export declare function parse(input: string, options: any): unknown;
+export declare function parse(input: string, options?: any): unknown;
 
 export declare class SyntaxError extends Error {
   expected: unknown;
@@ -16,4 +16,5 @@ export declare class SyntaxError extends Error {
       column: number;
     };
   };
+  format: any;
 };

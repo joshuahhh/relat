@@ -72,3 +72,24 @@ export function stripMeta<Meta>(expr: Expression<Meta>): Expression<{}> {
       assertNever(expr);
   }
 }
+
+export function toSexpr<Meta>(expr: Expression<Meta>): string {
+  switch (expr.type) {
+    case 'constant':
+      return JSON.stringify(expr.value);
+    case 'identifier':
+      return expr.name;
+    case 'unary':
+      return `(${expr.op} ${toSexpr(expr.operand)})`;
+    case 'binary':
+      return `(${expr.op} ${toSexpr(expr.left)} ${toSexpr(expr.right)})`;
+    case 'comprehension':
+      return `(comprehension ${expr.variable} ${toSexpr(expr.constraint)} ${toSexpr(expr.body)})`;
+    case 'let':
+      return `(let ${expr.variable} ${toSexpr(expr.value)} ${toSexpr(expr.body)})`;
+    case 'formula':
+      return `(formula "${expr.formula}")`;
+    default:
+      assertNever(expr);
+  }
+}

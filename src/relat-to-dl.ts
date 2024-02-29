@@ -1,9 +1,9 @@
-import _, { result } from 'lodash';
+import _ from 'lodash';
 import inspect from 'object-inspect';
 import * as DL from './dl.js';
+import { entries } from './misc.js';
 import * as Relat from './relat.js';
 import { rangeString } from './relat.js';
-import { assertNever, entries } from './misc.js';
 
 
 export function mkNextIndex() {
@@ -143,6 +143,12 @@ function atom(intExt: IntExt, intArgs: DLVarish[]): DL.Atom {
     relName,
     args: [...intArgs.map(unDLVarish), ...extSlots]
   };
+}
+
+export class TranslationError extends Error {
+  constructor(public exp: Relat.Expression, public env: Environment, public cause: Error) {
+    super(`Error translating ${rangeString(exp.range)}: ${cause.message}`);
+  }
 }
 
 export function translate(exp: Relat.Expression, env: Environment): TranslationResult {
@@ -776,10 +782,13 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       throw new Error(`Unexpected expression (${JSON.stringify(exp)})`);
     }
   } catch (e) {
-    if (e instanceof Error && !e.message.startsWith('Translating ')) {
-      e.message = `Translating ${exp.type} ${rangeString(exp.range)}: ${e.message}`;
+    if (e instanceof TranslationError) {
+      // error is from subexpression; rethrow
+      throw e;
+    } else {
+      const message = e instanceof Error ? e.message : inspect(e);
+      throw new TranslationError(exp, env, new Error(message));
     }
-    throw e
   }
 }
 
