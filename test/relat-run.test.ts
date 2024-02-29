@@ -106,6 +106,13 @@ describe("runRelat", () => {
     expect(output2).toEqual(FALSE);
   });
 
+  it("difference", async () => {
+    const rel1: Relation = { types: ["number"], tuples: [[100], [200]] };
+    const rel2: Relation = { types: ["number"], tuples: [[200], [300]] };
+    const output = await runRelat("rel1 - rel2", { rel1, rel2 });
+    expect(output).toEqual({ types: ["number"], tuples: [[100]] });
+  });
+
   it("basically works", async () => {
     const isPerson: Relation = { types: ["number"], tuples: [
       [10], [11], [12], [13], [20], [21], [22], [23], [30]

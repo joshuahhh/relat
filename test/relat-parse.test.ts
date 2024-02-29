@@ -45,6 +45,7 @@ describe("parseRelat", () => {
     ["`3 * x`", { type: "formula", formula: "3 * x" }],
     // NEW
     ["x[y]", { type: "binary", op: "[]", left: x, right: y }],
+    ["x-y", { type: "binary", op: "-", left: x, right: y }],
 
     // compounds
     ["some not x", { type: "unary", op: "some", operand: { type: "unary", op: "not", operand: x } }],
@@ -59,6 +60,7 @@ describe("parseRelat", () => {
     ["some x[y]", { type: "unary", op: "some", operand: { type: "binary", op: "[]", left: x, right: y } }],
     ["x.y[z]", { type: "binary", op: "[]", left: { type: "binary", op: ".", left: x, right: y }, right: z }],
     ["x[y][z]", { type: "binary", op: "[]", left: { type: "binary", op: "[]", left: x, right: y }, right: z }],
+    ["x-y-z", {type: "binary", op: "-", left: { type: "binary", op: "-", left: x, right: y }, right: z }],
   ];
 
   for (const [input, expected] of expectedParsings) {

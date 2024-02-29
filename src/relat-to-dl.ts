@@ -532,6 +532,43 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           },
         ],
       };
+    } else if (exp.type === 'binary' && exp.op === '-') {
+      /**************
+       * DIFFERENCE *
+       **************/
+      const leftResult = translate(exp.left, env);
+      const rightResult = translate(exp.right, env);
+      if (!slotTypesMatch(leftResult.intSlots, rightResult.intSlots)) {
+        throw new Error(`Relations in difference must have matching signatures, but got ${inspect(leftResult.intSlots)} and ${inspect(rightResult.intSlots)}`);
+      }
+      const intExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: leftResult.intSlots,  // TODO: debugName from left? meh why not
+        extSlots: getExtSlots(env.scope),
+      };
+      const namedSlots = nameSlots(intExt.intSlots, nextIndex);
+      return {
+        ...intExt,
+        program: [
+          ...leftResult.program,
+          ...rightResult.program,
+          '',
+          `// ${intExt.relName}: ${rangeString(exp.range)} (intersection)`,
+          decl(intExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(intExt, namedSlots),
+            body: [
+              atom(leftResult, namedSlots),
+              {
+                ...atom(rightResult, namedSlots),
+                negated: true,
+              },
+              ...env.constraint,
+            ],
+          },
+        ],
+      };
     } else if (exp.type === 'binary' && exp.op === '[]') {
       /***************
        * APPLICATION *

@@ -24,6 +24,12 @@ E1b
   / E2
 
 E2
+  = left:E2b rights:(_ "-" _ right:E2b { return right })*
+    // TODO: fix ranges
+    { return rights.reduce((left, right) => ({ type: "binary", op: "-", left, right, range: range() }), left) }
+  / E2b
+
+E2b
   = left:E3 rights:(_ "&" _ right:E3 { return right })*
     // TODO: fix ranges
     { return rights.reduce((left, right) => ({ type: "binary", op: "&", left, right, range: range() }), left) }
