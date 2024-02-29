@@ -94,7 +94,6 @@ export const Root = memo(() => {
     <div style={{minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column'}}>
       <div style={{display: 'flex', gap: 20, minHeight: 0}}>
         <h1 style={{margin: 0}}>Relative playground</h1>
-        <h2 style={{margin: 0}}>inputs</h2>
         {entries(inputs).map(([name, relation]) =>
           <div key={name} style={{minHeight: 0, display: 'flex', flexDirection: 'column'}}>
             <h3 style={{margin: 0}}>{name}</h3>
