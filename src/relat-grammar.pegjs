@@ -30,25 +30,13 @@ E2
   / E3
 
 E3
-  = "some" _ operand:E3
-  	{ return { type: "unary", op: "some", operand, range: range() } }
-  / "not" _ operand:E3
-  	{ return { type: "unary", op: "not", operand, range: range() } }
-  / "#" _ operand:E3
-  	{ return { type: "unary", op: "#", operand, range: range() } }
+  = op:("some" / "not" / "#") _ operand:E3
+    { return { type: "unary", op, operand, range: range() } }
   / E4
 
 E4
-  = left:E5 _ "=" _ right: E5
-    { return { type: "binary", op: "=", left, right, range: range() } }
-  / left:E5 _ "<" _ right: E5
-    { return { type: "binary", op: "<", left, right, range: range() } }
-  / left:E5 _ ">" _ right: E5
-    { return { type: "binary", op: ">", left, right, range: range() } }
-  / left:E5 _ "=<" _ right: E5
-    { return { type: "binary", op: "=<", left, right, range: range() } }
-  / left:E5 _ ">=" _ right: E5
-    { return { type: "binary", op: ">=", left, right, range: range() } }
+  = left:E5 _ op:("=<" / ">=" / "=" / "<" / ">") _ right: E5
+    { return { type: "binary", op, left, right, range: range() } }
   / E5
 
 E5
@@ -63,12 +51,8 @@ E5b
   / E6
 
 E6
-  = "^" _ operand:E7
-  	{ return { type: "unary", op: "^", operand, range: range() } }
-  / "*" _ operand:E7
-  	{ return { type: "unary", op: "*", operand, range: range() } }
-  / "~" _ operand:E7
-  	{ return { type: "unary", op: "~", operand, range: range() } }
+  = op:("^" / "*" / "~") _ operand:E7
+    { return { type: "unary", op, operand, range: range() } }
   / E7
 
 E7
