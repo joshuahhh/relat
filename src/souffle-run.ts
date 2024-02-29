@@ -57,6 +57,7 @@ export async function runSouffle(
   // let now = Date.now();
   const errorLines: string[] = [];
   const module = await loadSouffleModule({
+    // wasmMemory,
     wasmBinary,
     noInitialRun: true,
     printErr: (line) => {

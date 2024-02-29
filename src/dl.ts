@@ -60,6 +60,10 @@ export type Command =
       type: 'output',
       relName: RelationName,
     }
+  | {
+      type: 'comment',
+      comment: string,
+    }
   | string
 
 export type Program = Command[]
@@ -82,6 +86,9 @@ function commandToString(command: Command): string {
       return `.input ${command.relName}`;
     case 'output':
       return `.output ${command.relName}`;
+    case 'comment':
+      const lines = command.comment.split('\n');
+      return lines.map(line => `// ${line}`).join('\n');
     default:
       const _exhaustiveCheck: never = command;
       void(_exhaustiveCheck);

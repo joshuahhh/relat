@@ -4,6 +4,11 @@
     return rights.reduce((left, right) => ({ type: "binary", op, left, right, range }), left);
   }
 
+  function associateLeftWithOps(left, rights, range) {
+    // TODO: fix ranges?
+    return rights.reduce((left, [op, right]) => ({ type: "binary", op, left, right, range }), left);
+  }
+
   function resolveSugar(op) {
     if (op === "Σ") { return "sum"; }
     return op;
@@ -28,42 +33,33 @@ Expression = E1
 E1
   = left:E1b rights:(_ ";" _ right:E1b { return right })*
     { return associateLeft(";", left, rights, range()); }
-  / E1b
 
 E1b
   = left:E2 rights:(_ "," _ right:E2 { return right })*
     { return associateLeft(",", left, rights, range()); }
-  / E2
 
 E2
   = left:E2b rights:(_ "-" _ right:E2b { return right })*
     { return associateLeft("-", left, rights, range()); }
-  / E2b
 
 E2b
   = left:E3 rights:(_ "&" _ right:E3 { return right })*
     { return associateLeft("&", left, rights, range()); }
-  / E3
 
 E3
-  = op:("some" / "not" / "#" / "min" / "max" / "sum" / "Σ") _ operand:E3
-    { return { type: "unary", op: resolveSugar(op), operand, range: range() }; }
+  = left:E4 _ op:("=<" / ">=" / "=" / "<" / ">") _ right: E4
+    { return { type: "binary", op, left, right, range: range() }; }
   / E4
 
 E4
-  = left:E5 _ op:("=<" / ">=" / "=" / "<" / ">") _ right: E5
-    { return { type: "binary", op, left, right, range: range() }; }
+  = op:("some" / "not" / "#" / "min" / "max" / "sum" / "Σ") _ operand:E4
+    { return { type: "unary", op: resolveSugar(op), operand, range: range() }; }
   / E5
 
 E5
-  = left:E5b rights:(_ "[" _ right:Expression _ "]" { return right })*
-    { return associateLeft("[]", left, rights, range()); }
-  / E5b
-
-E5b
-  = left:E6 rights:(_ "." _ right:E6 { return right })*
-    { return associateLeft(".", left, rights, range()); }
-  / E6
+  = left:E6 rights:(_ "[" _ right:Expression _ "]" { return ["[]", right] }
+                     / _ "." _ right:E6 { return [".", right] })*
+    { return associateLeftWithOps(left, rights, range()); }
 
 E6
   = op:("^" / "*" / "~") _ operand:E6

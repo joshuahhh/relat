@@ -15,10 +15,22 @@ export const movies: Scenario = {
   inputs: moviesInputs as any,
   examples: [{
     description: "how many movies of each genre?",
-    code: "{genre: isTitle.hasGenre | #hasGenre.genre}"
+    code: "{genre: isTitle.hasGenre | #hasGenre.genre}",
   }, {
     description: "which directors act in their movies?",
-    code: "{x: isTitle | x.hasActor & x.hasDirector}"
+    code: "{x: isTitle | x.hasActor & x.hasDirector}",
+  }, {
+    description: "how many actors?",
+    code: "#isTitle.hasActor",
+  }, {
+    description: "how many actors are connected with Vin Diesel?",
+    code: "#'Vin Diesel'.^(~hasActor.hasActor)",
+  }, {
+    description: "shortest runtime by genre?",
+    code: "{genre: isTitle.hasGenre | min ~hasGenre[genre].hasRuntimeMin}",
+  // }, {
+  //   description: "which pairs act together a lot?",
+  //   code: "let actors = isTitle.hasActor | #{a1: actors | {a2: actors | a1, a2}}",
   }],
 };
 

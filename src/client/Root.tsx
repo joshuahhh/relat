@@ -39,6 +39,7 @@ async function process(code: string, inputs: Record<string, Relation>) {
     const translated = translate(ast, env);
     const fullProgram = translationResultToFullProgram(translated, scope);
     const programString = programToString(fullProgram);
+    // console.log(programString);
 
     const output = await runRelat(code, inputs);
 
@@ -70,7 +71,7 @@ export const Root = memo(() => {
 
   return <div className='flex flex-col p-6 w-full h-full'>
     <div className="flex flex-row gap-10 h-1/3">
-      <div>
+      <div className='flex flex-col justify-end mb-6'>
         <h1 className='text-5xl'>relat</h1>
         <div className='h-2'/>
         {scenarios.map((s, i) =>
@@ -104,25 +105,44 @@ export const Root = memo(() => {
     <div className='flex flex-row min-h-0 gap-8'>
       <div className='flex flex-col w-1/2'>
         <h2 className='text-xl font-bold'>try out...</h2>
-        {scenario.examples.map((example, i) =>
-          <button key={i} className='block text-[#646cff] hover:text-[#535bf2] text-left'
-            onClick={() => setCode(example.code)}
-          >
-            <div className='italic'>
-              {example.description}
-            </div>
-            <div className='ml-4 font-mono'>
-              {example.code}
-            </div>
-          </button>
-        )}
+        <div className='overflow-auto'>
+          {scenario.examples.map((example, i) =>
+            <button key={i} className='block text-[#646cff] hover:text-[#535bf2] text-left'
+              onClick={() => setCode(example.code)}
+            >
+              <div className='italic'>
+                {example.description}
+              </div>
+              <div className='ml-4 font-mono'>
+                {example.code}
+              </div>
+            </button>
+          )}
+        </div>
         <div className='h-4'/>
         <h2 className='text-xl font-bold'>code</h2>
         <textarea className='p-4 font-mono'
           value={code} onChange={e => {
             setCode(e.target.value);
-            e.target.style.height = 'auto';
-            e.target.style.height = (e.target.scrollHeight + 5) + 'px';
+            e.target.style.minHeight = 'auto';
+            e.target.style.minHeight = (e.target.scrollHeight + 5) + 'px';
+          }}
+          onKeyDown={(e) => {
+            const textarea = e.currentTarget;
+            if (e.key === 'Tab') {
+              e.preventDefault();
+
+              var start = textarea.selectionStart;
+              var end = textarea.selectionEnd;
+
+              // set textarea value to: text before caret + tab + text after caret
+              textarea.value = textarea.value.substring(0, start) +
+                "\t" + textarea.value.substring(end);
+
+              // put caret at right position again
+              textarea.selectionStart =
+                e.currentTarget.selectionEnd = start + 1;
+            }
           }}
         />
         <div className='h-4'/>
