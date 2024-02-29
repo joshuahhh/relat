@@ -11,7 +11,6 @@ export async function runRelat(code: string, inputs: Record<string, Relation | a
   const scope: Record<RelatVariable, RelatVariableBinding & {type: 'relation'}> = fromEntries(
     entries(inputRelations)
     .map(([relName, relation]) => {
-      const relatVar = mkRelatVarUnsafe(relName);
       const intExt: IntExt = {
         relName: relName,
         intSlots: relation.types.map((type, i) => ({

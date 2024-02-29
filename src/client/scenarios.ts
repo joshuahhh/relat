@@ -1,4 +1,5 @@
 import { Relation } from "../souffle-run.js";
+import moviesInputs from "./movies-inputs.json";
 
 export type Scenario = {
   name: string,
@@ -11,10 +12,13 @@ export type Scenario = {
 
 export const movies: Scenario = {
   name: "Movies",
-  inputs: {},
+  inputs: moviesInputs as any,
   examples: [{
-    description: "all movies",
-    code: "movie"
+    description: "how many movies of each genre?",
+    code: "{genre: isTitle.hasGenre | #hasGenre.genre}"
+  }, {
+    description: "which directors act in their movies?",
+    code: "{x: isTitle | x.hasActor & x.hasDirector}"
   }],
 };
 
@@ -37,6 +41,9 @@ export const simpleFamily: Scenario = {
     ] },
   },
   examples: [{
+    description: "who is unhappy?",
+    code: "isPerson - isHappy",
+  }, {
     description: "who has an unhappy child?",
     code: "{x : isPerson | some (x.hasChild - isHappy)}",
   }, {

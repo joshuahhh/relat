@@ -42,7 +42,7 @@ async function process(code: string, inputs: Record<string, Relation>) {
 
     const output = await runRelat(code, inputs);
 
-    return { ok: true as const, ast, programString, output };
+    return { ok: true as const, ast, translated, programString, output };
   } catch (e) {
     return { ok: false as const, error: e };
   }
@@ -69,14 +69,14 @@ export const Root = memo(() => {
   }, [code, scenario.inputs]);
 
   return <div className='flex flex-col p-6 w-full h-full'>
-    <div className="flex flex-row gap-5 h-1/3">
+    <div className="flex flex-row gap-10 h-1/3">
       <div>
         <h1 className='text-5xl'>relat</h1>
         <div className='h-4'/>
         {scenarios.map((s, i) =>
           <button key={i}
             className={clsx(
-              'block text-[#646cff] hover:text-[#535bf2]',
+              'block text-[#646cff] hover:text-[#535bf2] text-left',
               s === scenario && 'font-bold'
             )}
             onClick={() => {
@@ -88,14 +88,16 @@ export const Root = memo(() => {
           </button>
         )}
       </div>
-      {entries(scenario.inputs).map(([name, relation]) =>
-        <div key={name} className="flex flex-col items-start overflow-hidden">
-          <h3>{name}</h3>
-          <div className='overflow-y-scroll'>
-            <RelationView relation={relation} />
+      <div className='flex flex-row gap-10 overflow-x-scroll'>
+        {entries(scenario.inputs).map(([name, relation]) =>
+          <div key={name} className="flex flex-col items-start w-fit">
+            <h3 className='text-lg font-bold'>{name}</h3>
+            <div className='overflow-y-scroll w-fit'>
+              <RelationView relation={relation} />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
     <hr className='min-h-px my-4 bg-gray-500 border-0'/>
     <div className='flex flex-row min-h-0 gap-8'>
@@ -160,9 +162,9 @@ export const Root = memo(() => {
         <h2 className='text-xl font-bold'>generated Datalog</h2>
         { lastGoodProcessed === null
         ? <p>processing...</p>
-        : <pre style={{overflow: 'auto'}}>
-            {lastGoodProcessed.programString}
-          </pre>
+        : <div style={{overflow: 'auto'}}>
+            <DatalogView program={programToString(lastGoodProcessed.translated.program)} />
+          </div>
         }
       </div>
 
@@ -175,6 +177,19 @@ export const Root = memo(() => {
 //   'symbol': 'x',
 // };
 
+const DatalogView = memo(({ program }: { program: string }) => {
+  // TODO: put stuff on right of :- all on right?
+  // TODO: color variables per line?
+  const lines = program.split('\n');
+  return <div>
+    {lines.map((line, i) => {
+      return <pre key={i} className={clsx("whitespace-pre-wrap -indent-8 pl-8", (line.startsWith("//") || line.startsWith(".")) && "opacity-50")}>
+        {line || ' '}
+      </pre>
+    })}
+  </div>;
+});
+
 const RelationView = memo(({ relation }: { relation: Relation }) => {
   if (relation.types.length === 0) {
     if (relation.tuples.length === 0) {
@@ -183,16 +198,17 @@ const RelationView = memo(({ relation }: { relation: Relation }) => {
       return <div>TRUE</div>;
     }
   }
-  const MAX_TUPLES = 15;
+  const MAX_TUPLES = 20;
   const tuplesToShow = relation.tuples.slice(0, MAX_TUPLES);
   const numTuplesHidden = relation.tuples.length - tuplesToShow.length;
-  return <div>
+  return <div className='w-fit'>
     <table style={{borderCollapse: 'collapse'}}>
       <tbody>
         {tuplesToShow.map((row, i) =>
           <tr key={i}>
             {row.map((value, j) =>
-              <td key={j} style={{border: '1px solid hsl(0, 0%, 50%)', padding: 5}}>
+              <td key={j} className='px-1 align-top'
+                style={{borderBottom: '1px solid hsl(0, 0%, 20%)', ...j > 0 && {borderLeft: '1px solid hsl(0, 0%, 50%)'}}}>
                 {"" + value}
               </td>
             )}
