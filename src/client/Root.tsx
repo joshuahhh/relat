@@ -8,31 +8,13 @@ import { runRelat } from '../relat-run.js';
 import { Environment, IntExt, RelatVariable, RelatVariableBinding, mkNextIndex, mkRelatVarUnsafe, translate, translationResultToFullProgram } from '../relat-to-dl.js';
 import { stripMeta, toSexpr } from '../relat.js';
 import { Relation, inferTypes } from '../souffle-run.js';
+import clsx from 'clsx';
+import { Scenario, scenarios } from './scenarios.js';
 
-const isPerson: Relation = { types: ["number"], tuples: [
-  [10], [11], [12], [13], [20], [21], [22], [23], [30]
-] };
-const hasChild: Relation = { types: ["number", "number"], tuples: [
-  [10, 11],
-  [10, 12],
-  [10, 13],
-  [20, 21],
-  [20, 22],
-  [20, 23]
-] };
-const isHappy: Relation = { types: ["number"], tuples: [
-  [11], [12], [13], [21], [22]
-] };
-
-// `{x : isPerson | some {y : x.hasChild | not y.isHappy}}`
-// `{x : isPerson | some (x.hasChild - .isHappy)}`
-
-const inputs = { isPerson, hasChild, isHappy };
-const inputRelations = _.mapValues(inputs, inferTypes);
-
-async function process(code: string) {
+async function process(code: string, inputs: Record<string, Relation>) {
   try {
     const ast = parseRelat(code);
+    const inputRelations = _.mapValues(inputs, inferTypes);
     const scope: Record<RelatVariable, RelatVariableBinding & {type: 'relation'}> = fromEntries(
       entries(inputRelations)
       .map(([relName, relation]) => {
@@ -67,7 +49,8 @@ async function process(code: string) {
 }
 
 export const Root = memo(() => {
-  const [ code, setCode ] = useState("{x : isPerson | some {y : x.hasChild | not y.isHappy}}");
+  const [ scenario, setScenario ] = useState<Scenario>(scenarios[0]);
+  const [ code, setCode ] = useState(scenario.examples[0].code);
   // const [ textAreaHeight, setTextAreaHeight ] = useState(100);
 
   const [ processed, setProcessed ] = useState<Awaited<ReturnType<typeof process>> | null>(null);
@@ -77,61 +60,89 @@ export const Root = memo(() => {
 
   useEffect(() => {
     (async () => {
-      const processed = await process(code);
+      const processed = await process(code, scenario.inputs);
       setProcessed(processed);
       if (processed !== null && processed.ok) {
         setLastGoodProcessed(processed);
       }
     })();
-  }, [code]);
+  }, [code, scenario.inputs]);
 
-  return <div style={{
-    width: '100%', height: '100%',
-    padding: 20,
-    display: 'flex',
-    flexDirection: 'column',
-  }}>
-    <div style={{minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column'}}>
-      <div style={{display: 'flex', gap: 20, minHeight: 0}}>
-        <h1 style={{margin: 0}}>Relative playground</h1>
-        {entries(inputs).map(([name, relation]) =>
-          <div key={name} style={{minHeight: 0, display: 'flex', flexDirection: 'column'}}>
-            <h3 style={{margin: 0}}>{name}</h3>
-            <RelationView relation={relation} />
-          </div>
+  return <div className='flex flex-col p-6 w-full h-full'>
+    <div className="flex flex-row gap-5 h-1/3">
+      <div>
+        <h1 className='text-5xl'>relat</h1>
+        <div className='h-4'/>
+        {scenarios.map((s, i) =>
+          <button key={i}
+            className={clsx(
+              'block text-[#646cff] hover:text-[#535bf2]',
+              s === scenario && 'font-bold'
+            )}
+            onClick={() => {
+              setScenario(s);
+              setCode(s.examples[0].code);
+            }}
+          >
+            {s.name}
+          </button>
         )}
       </div>
+      {entries(scenario.inputs).map(([name, relation]) =>
+        <div key={name} className="flex flex-col items-start overflow-hidden">
+          <h3>{name}</h3>
+          <div className='overflow-y-scroll'>
+            <RelationView relation={relation} />
+          </div>
+        </div>
+      )}
     </div>
-    <hr style={{width: '100%', border: '0.5px solid hsl(0, 0%, 50%)'}}/>
-    <div style={{display: 'grid', gap: 20, gridTemplateColumns: '50% 50%', gridTemplateRows: 'auto', minHeight: 0}}>
-      <div style={{gridColumn: 1}}>
-        <h2 style={{margin: 0}}>code</h2>
-        <textarea
+    <hr className='min-h-px my-4 bg-gray-500 border-0'/>
+    <div className='flex flex-row min-h-0 gap-8'>
+      <div className='flex flex-col w-1/2'>
+        <h2 className='text-xl font-bold'>try out...</h2>
+        {scenario.examples.map((example, i) =>
+          <button key={i} className='block text-[#646cff] hover:text-[#535bf2] text-left'
+            onClick={() => setCode(example.code)}
+          >
+            <div className='italic'>
+              {example.description}
+            </div>
+            <div className='ml-4 font-mono'>
+              {example.code}
+            </div>
+          </button>
+        )}
+        <div className='h-4'/>
+        <h2 className='text-xl font-bold'>code</h2>
+        <textarea className='p-4 font-mono'
           value={code} onChange={e => {
             setCode(e.target.value);
             e.target.style.height = 'auto';
             e.target.style.height = (e.target.scrollHeight + 5) + 'px';
           }}
-          style={{
-            width: "90%",
-            // height: textAreaHeight,
-            padding: 10,
-          }}
         />
-        { processed !== null && processed.ok === false && (
-            console.log(processed),
-            processed.error instanceof SyntaxError
-            ? <pre style={{color: 'hsl(0, 50%, 70%)'}}>
-                {processed.error.format([{source: code, text: code}]).replace(/^ *--> .*\n/m, '')}
-              </pre>
-            : <pre style={{color: 'hsl(0, 50%, 70%)'}}>
-                {(processed.error as Error).message}
-              </pre>
-          )
+        <div className='h-4'/>
+        <div className={clsx("min-h-0 overflow-hidden flex flex-col", lastGoodProcessed !== processed && "opacity-50")}>
+          <h2 className='text-xl font-bold'>result</h2>
+          { lastGoodProcessed === null
+          ? <p>processing...</p>
+          : <div className='overflow-y-scroll'>
+              <RelationView relation={lastGoodProcessed.output} />
+            </div>
+          }
+        </div>
+        { processed !== null && processed.ok === false &&
+          <pre className="bg-red-950 whitespace-pre-wrap">
+            { processed.error instanceof SyntaxError
+            ? processed.error.format([{source: code, text: code}]).replace(/^ *--> .*\n/m, '')
+            : (processed.error as Error).message
+            }
+          </pre>
         }
       </div>
-      <div style={{gridColumn: 2, opacity: lastGoodProcessed === processed ? 'initial' : '20%'}}>
-        <h2 style={{margin: 0}}>ast</h2>
+      <div className={clsx('flex flex-col w-1/2', lastGoodProcessed !== processed && "opacity-20")}>
+        <h2 className='text-xl font-bold'>code ast</h2>
         { lastGoodProcessed === null
         ? <p>processing...</p>
         : <details>
@@ -145,9 +156,8 @@ export const Root = memo(() => {
             </pre>
           </details>
         }
-      </div>
-      <div style={{gridColumn: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', opacity: lastGoodProcessed === processed ? 'initial' : '20%'}}>
-        <h2 style={{margin: 0}}>dl</h2>
+        <div className='h-4'/>
+        <h2 className='text-xl font-bold'>generated Datalog</h2>
         { lastGoodProcessed === null
         ? <p>processing...</p>
         : <pre style={{overflow: 'auto'}}>
@@ -155,13 +165,7 @@ export const Root = memo(() => {
           </pre>
         }
       </div>
-      <div style={{gridColumn: 2, opacity: lastGoodProcessed === processed ? 'initial' : '20%'}}>
-        <h2 style={{margin: 0}}>result</h2>
-        { lastGoodProcessed === null
-        ? <p>processing...</p>
-        : <RelationView relation={lastGoodProcessed.output} />
-        }
-      </div>
+
     </div>
   </div>;
 });
@@ -179,19 +183,13 @@ const RelationView = memo(({ relation }: { relation: Relation }) => {
       return <div>TRUE</div>;
     }
   }
-  return <div style={{overflow: 'auto', minHeight: 0}}>
+  const MAX_TUPLES = 15;
+  const tuplesToShow = relation.tuples.slice(0, MAX_TUPLES);
+  const numTuplesHidden = relation.tuples.length - tuplesToShow.length;
+  return <div>
     <table style={{borderCollapse: 'collapse'}}>
-      {/* <thead>
-        <tr>
-          {relation.types.map((type, i) =>
-            <th key={i} style={{border: '1px solid hsl(0, 0%, 50%)', padding: 5}}>
-              {headingByType[type]}
-            </th>
-          )}
-        </tr>
-      </thead> */}
       <tbody>
-        {relation.tuples.map((row, i) =>
+        {tuplesToShow.map((row, i) =>
           <tr key={i}>
             {row.map((value, j) =>
               <td key={j} style={{border: '1px solid hsl(0, 0%, 50%)', padding: 5}}>
@@ -202,5 +200,10 @@ const RelationView = memo(({ relation }: { relation: Relation }) => {
         )}
       </tbody>
     </table>
+    {numTuplesHidden > 0 &&
+      <div>
+        + {numTuplesHidden}
+      </div>
+    }
   </div>;
 });

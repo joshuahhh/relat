@@ -59,7 +59,7 @@ E5b
   / E6
 
 E6
-  = op:("^" / "*" / "~") _ operand:E7
+  = op:("^" / "*" / "~") _ operand:E6
     { return { type: "unary", op, operand, range: range() } }
   / E7
 
@@ -70,7 +70,7 @@ E7
   	{ return exp }
   / "{" _ variable:Identifier _ ":" _ constraint:Expression _ "|" _ body:Expression _ "}"
   	{ return { type: "comprehension", variable, constraint, body, range: range() } }
-  / number:$([1-9][0-9]*)
+  / number:($([1-9][0-9]*) / "0")
     { return { type: "constant", value: Number(number), range: range() } }
   / "'" _ string:$([^']*) _ "'"
   	{ return { type: "constant", value: string, range: range() } }
