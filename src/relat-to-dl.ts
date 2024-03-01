@@ -233,8 +233,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             head: atom(intExt, joinNamedSlots),
             body: [
               atom(leftResult, leftNamedSlots),
-              atom(rightResult, rightNamedSlots),
-              `${_.last(leftNamedSlots)!.dlVar} = ${_.first(rightNamedSlots)!.dlVar}`,
+              atom(rightResult, [_.last(leftNamedSlots)!, ..._.tail(rightNamedSlots)]),
               ...env.constraint,
             ],
           },
