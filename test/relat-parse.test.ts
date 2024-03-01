@@ -73,6 +73,13 @@ describe("parseRelat", () => {
     ["x[_][y]", { type: "binary", op: "[]", left: { type: "unary", op: "[_]", operand: x }, right: y }],
     ["x[y][_]", { type: "unary", op: "[_]", operand: { type: "binary", op: "[]", left: x, right: y } }],
     ["x.y[_]", { type: "unary", op: "[_]", operand: { type: "binary", op: ".", left: x, right: y } }],
+    ["#x.y > #x.y.z",
+      { type: "binary", op: ">",
+        left: {
+          type: "unary", op: "#", operand: { type: "binary", op: ".", left: x, right: y } },
+        right: {
+          type: "unary", op: "#", operand: { type: "binary", op: ".", left: { type: "binary", op: ".", left: x, right: y }, right: z } } },
+    ]
   ];
 
   for (const [input, expected] of expectedParsings) {

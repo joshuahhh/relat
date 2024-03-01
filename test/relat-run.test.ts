@@ -166,16 +166,17 @@ describe("runRelat", () => {
       simpleFamily.inputs
     );
     expect(hasChildButNoSadChildren).toEqual({ types: ["number"], tuples: [[10]] });
-  });
 
-  it.fails("continues to work", async () => {
     const hasSadChild2 = await runRelat(
-      `{ x : isPerson | #x.hasChild > #x.hasChild.isHappy }`,
+      `{ x : isPerson | #x.hasChild > #(x.hasChild & isHappy) }`,
       simpleFamily.inputs
     );
     expect(hasSadChild2).toEqual({ types: ["number"], tuples: [[20]] });
+
+    const hasSadChild3 = await runRelat(
+      `{ x : isPerson | some (x.hasChild - isHappy)}`,
+      simpleFamily.inputs
+    );
+    expect(hasSadChild3).toEqual({ types: ["number"], tuples: [[20]] });
   });
-
-
-  // TODO: test every single operator, lol
 });
