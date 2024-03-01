@@ -23,8 +23,13 @@ export function mkNextIndex() {
 export type RelatVariable = DL.VariableName & { __RelatVariable: true };
 
 export type RelatVariableBinding =
-  | { type: 'scalar', scalarType: DL.Type }
-      // these come from comprehensions; will become part of extSlots
+  | { type: 'scalar', scalarType: DL.Type, constraint: DL.Atom, constraintExtSlots: RelatVariable[] }
+      // These come from comprehensions; will become part of extSlots.
+      // `constraint` gives an atom that will constrain use of this variable in
+      // the body of the comprehension. This is important to make sure that all
+      // variables are grounded. `constraintExtSlots` are external variables
+      // referred to in the constraint; they come along for the ride as extra
+      // references when you refer to this variable.
   | { type: 'relation', intExt: IntExt }
       // these come from input relations and `let` bindings
 
@@ -33,12 +38,6 @@ export type Environment = {
   // Environment.
   nextIndex: () => number,
     // Generator for unique indices.
-  constraint: DL.Literal[],
-    // constraint gives literals that constrain in-scope variables. For
-    // example, if we are translating a subexpression inside a comprehension,
-    // then the constraint will be the literals that constrain the comprehension
-    // variables. This is important to make sure that all variables are
-    // grounded.
   scope: Scope,
 }
 
@@ -54,10 +53,25 @@ function getScalarTypeFromScope(varName: RelatVariable, scope: Scope): DL.Type {
   }
   return type.scalarType;
 }
-function getExtSlots(scope: Scope): RelatVariable[] {
+function getAllExtSlots(scope: Scope): RelatVariable[] {
   return entries(scope)
     .filter(([_, binding]) => binding.type === 'scalar')
     .map(([name, _]) => name);
+}
+function mergeExtSlots(slots1: RelatVariable[], slots2: RelatVariable[]): RelatVariable[] {
+  return _.uniq([...slots1, ...slots2]);
+}
+function constraintForExtSlots(extSlots: RelatVariable[], scope: Scope): DL.Literal[] {
+  return extSlots.flatMap((name) => {
+    const binding = scope[name];
+    if (!binding) {
+      throw new Error(`Variable ${name} not in scope`);
+    }
+    if (binding.type !== 'scalar') {
+      throw new Error(`Variable ${name} not in scope as scalar`);
+    }
+    return binding.constraint;
+  });
 }
 
 export type IntExt = {
@@ -173,7 +187,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         const intExt: IntExt = {
           relName: `R${env.nextIndex()}`,
           intSlots: [ { type: relatVarBinding.scalarType, debugName: exp.name } ],
-          extSlots: getExtSlots(env.scope),
+          extSlots: [ relatVar, ...relatVarBinding.constraintExtSlots ],
         }
         return {
           ...intExt,
@@ -185,7 +199,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
               type: 'rule',
               head: atom(intExt, [ relatVar ]),
                 // so the provided int var will overlap with an ext var
-              body: [ ...env.constraint ],
+              body: [ relatVarBinding.constraint ],
             }
           ],
         };
@@ -218,7 +232,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: joinNamedSlots,
-        extSlots: getExtSlots(env.scope),
+        extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       return {
         ...intExt,
@@ -234,7 +248,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             body: [
               atom(leftResult, leftNamedSlots),
               atom(rightResult, [_.last(leftNamedSlots)!, ..._.tail(rightNamedSlots)]),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -251,7 +265,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: joinNamedSlots,
-        extSlots: getExtSlots(env.scope),
+        extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       return {
         ...intExt,
@@ -267,7 +281,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             body: [
               atom(leftResult, leftNamedSlots),
               atom(rightResult, rightNamedSlots),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -291,13 +305,14 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       };
       const envForBody: Environment = {
         ...env,
-        constraint: [
-          ...env.constraint,
-          atom(constraintResult, [newRelatVar])
-        ],
         scope: {
           ...env.scope,
-          [newRelatVar]: { type: 'scalar', name: newRelatVar, scalarType: newIntSlot.type },
+          [newRelatVar]: {
+            type: 'scalar',
+            scalarType: newIntSlot.type,
+            constraint: atom(constraintResult, [newRelatVar]),
+            constraintExtSlots: constraintResult.extSlots,
+          } satisfies RelatVariableBinding,  // TODO: why do I need this? this is scary
         },
       };
       const bodyResult = translate(exp.body, envForBody);
@@ -305,7 +320,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: [ newIntSlot, ...bodyNamedSlots ],
-        extSlots: getExtSlots(env.scope),
+        extSlots: _.difference(bodyResult.extSlots, [newRelatVar]),
       };
       return {
         ...intExt,
@@ -320,7 +335,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             head: atom(intExt, [ newRelatVar, ...bodyNamedSlots ]),
             body: [
               atom(bodyResult, bodyNamedSlots),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -333,7 +348,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: [],
-        extSlots: getExtSlots(env.scope),
+        extSlots: operandResult.extSlots,
       };
 
       const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
@@ -349,7 +364,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             head: atom(intExt, []),
             body: [
               atom(operandResult, operandNamedSlots.map(() => unnamedDLVar)),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ]
           },
         ],
@@ -362,7 +377,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: [],
-        extSlots: getExtSlots(env.scope),
+        extSlots: operandResult.extSlots,
       };
       const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
       return {
@@ -380,7 +395,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
                 ...atom(operandResult, operandNamedSlots.map(() => unnamedDLVar)),
                 negated: true,
               },
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -403,7 +418,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: operandResult.intSlots,
-        extSlots: getExtSlots(env.scope),
+        extSlots: operandResult.extSlots,
       };
       const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
       const middleVar = mkDLVar('middle', nextIndex);
@@ -420,7 +435,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             head: atom(intExt, operandNamedSlots),
             body: [
               atom(operandResult, operandNamedSlots),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
           // 2. new relation includes transitive closure of old relation
@@ -430,7 +445,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             body: [
               atom(intExt, [ operandNamedSlots[0], middleVar ]),
               atom(operandResult, [ middleVar, operandNamedSlots[1] ]),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -446,7 +461,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: [ operandResult.intSlots[1], operandResult.intSlots[0] ],
-        extSlots: getExtSlots(env.scope),
+        extSlots: operandResult.extSlots,
       };
       const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
       return {
@@ -461,7 +476,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             head: atom(intExt, [ operandNamedSlots[1], operandNamedSlots[0] ]),
             body: [
               atom(operandResult, operandNamedSlots),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -478,7 +493,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: leftResult.intSlots,  // TODO: debugName from left? meh why not
-        extSlots: getExtSlots(env.scope),
+        extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       const namedSlots = nameSlots(intExt.intSlots, nextIndex);
       return {
@@ -494,7 +509,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             head: atom(intExt, namedSlots),
             body: [
               atom(leftResult, namedSlots),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
           {
@@ -502,7 +517,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             head: atom(intExt, namedSlots),
             body: [
               atom(rightResult, namedSlots),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -519,7 +534,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: leftResult.intSlots,  // TODO: debugName from left? meh why not
-        extSlots: getExtSlots(env.scope),
+        extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       const namedSlots = nameSlots(intExt.intSlots, nextIndex);
       return {
@@ -536,7 +551,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             body: [
               atom(leftResult, namedSlots),
               atom(rightResult, namedSlots),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -553,7 +568,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: leftResult.intSlots,  // TODO: debugName from left? meh why not
-        extSlots: getExtSlots(env.scope),
+        extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       const namedSlots = nameSlots(intExt.intSlots, nextIndex);
       return {
@@ -573,7 +588,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
                 ...atom(rightResult, namedSlots),
                 negated: true,
               },
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -595,7 +610,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: resultNamedSlots,
-        extSlots: getExtSlots(env.scope),
+        extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       return {
         ...intExt,
@@ -611,7 +626,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             body: [
               atom(leftResult, leftNamedSlots),
               atom(rightResult, leftNamedSlots.slice(0, rightResult.intSlots.length)),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -628,7 +643,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: operandNamedSlots.slice(1),
-        extSlots: getExtSlots(env.scope),
+        extSlots: operandResult.extSlots,
       };
       return {
         ...intExt,
@@ -642,7 +657,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             head: atom(intExt, operandNamedSlots.slice(1)),
             body: [
               atom(operandResult, [ unnamedDLVar, ...operandNamedSlots.slice(1) ]),
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],
@@ -685,7 +700,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: [ countNamedSlot ],
-        extSlots: getExtSlots(env.scope),
+        extSlots: operandResult.extSlots,
       };
       return {
         ...intExt,
@@ -702,7 +717,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
                 ...atom(operandResult, operandResult.intSlots.map(() => unnamedDLVar)),
                 aggregate: { type: 'count', output: countNamedSlot.dlVar },
               },
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ]
           },
         ],
@@ -727,7 +742,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: [ outputNamedSlot ],
-        extSlots: getExtSlots(env.scope),
+        extSlots: operandResult.extSlots,
       };
       return {
         ...intExt,
@@ -746,7 +761,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
                 )),
                 aggregate: { type: exp.op, input: inputNamedSlot.dlVar, output: outputNamedSlot.dlVar },
               },
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ]
           },
         ],
@@ -769,7 +784,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: [ ],
-        extSlots: getExtSlots(env.scope),
+        extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       const leftVar = mkDLVar('left', nextIndex);
       const rightVar = mkDLVar('right', nextIndex);
@@ -795,7 +810,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
               atom(leftResult, [ leftVar ]),
               atom(rightResult, [ rightVar ]),
                `(${leftVar} ${souffleOperator} ${rightVar})`,
-              ...env.constraint,
+               ...constraintForExtSlots(intExt.extSlots, env.scope),
             ]
           },
         ],
@@ -837,7 +852,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
         intSlots: [ namedSlot ],
-        extSlots: getExtSlots(env.scope),
+        extSlots: getAllExtSlots(env.scope),  // TODO: guess we should parse & constrain this?
       };
       return {
         ...intExt,
@@ -850,7 +865,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             head: atom(intExt, [ namedSlot ]),
             body: [
               `(${namedSlot.dlVar} = ${exp.formula})`,
-              ...env.constraint,
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },
         ],

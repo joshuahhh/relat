@@ -34,7 +34,6 @@ async function process(code: string, inputs: Record<string, Relation>) {
     const env: Environment = {
         nextIndex: mkNextIndex(),
         scope,
-        constraint: [],
     };
 
     const translated = translate(ast, env);
