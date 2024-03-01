@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import { ReactNode, memo, useEffect, useMemo, useState } from 'react';
+import { ReactNode, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { programToString } from '../dl.js';
 import { entries, fromEntries } from '../misc.js';
 import { SyntaxError } from '../relat-grammar/relat-grammar.js';
@@ -14,7 +14,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shad
 
 async function process(code: string, inputs: Record<string, Relation>) {
   try {
-    const ast = parseRelat(code);
+    const codeDesugared = code
+      .replaceAll("<_>", "okv[_]")
+      .replaceAll(/<([A-Za-z_][A-Za-z0-9_]*)>/g, 'okv["$1"]');
+    const ast = parseRelat(codeDesugared);
     const inputRelations = _.mapValues(inputs, inferTypes);
     const scope: Record<RelatVariable, RelatVariableBinding & {type: 'relation'}> = fromEntries(
       entries(inputRelations)
@@ -41,7 +44,7 @@ async function process(code: string, inputs: Record<string, Relation>) {
     const programString = programToString(fullProgram);
     // console.log(programString);
 
-    const output = await runRelat(code, inputs);
+    const output = await runRelat(codeDesugared, inputs);
 
     return { ok: true as const, ast, translated, programString, output };
   } catch (e) {
@@ -67,6 +70,11 @@ export const Root = memo(() => {
       }
     })();
   }, [code, scenario.inputs]);
+
+  const fixTextAreaHeight = useCallback((elem: HTMLTextAreaElement) => {
+    elem.style.minHeight = 'auto';
+    elem.style.minHeight = (elem.scrollHeight + 5) + 'px';
+  }, []);
 
   return <div className='flex flex-col p-6 w-full h-full'>
     <div className="flex flex-row gap-10 h-1/3">
@@ -122,10 +130,11 @@ export const Root = memo(() => {
         <h2 className='text-xl font-bold'>code</h2>
         <textarea className='p-4 font-mono bg-gray-800 whitespace-pre'
           spellCheck={false}
-          value={code} onChange={e => {
+          value={code}
+          ref={fixTextAreaHeight}
+          onChange={e => {
             setCode(e.target.value);
-            e.target.style.minHeight = 'auto';
-            e.target.style.minHeight = (e.target.scrollHeight + 5) + 'px';
+            fixTextAreaHeight(e.target);
           }}
           onKeyDown={(e) => {
             const textarea = e.currentTarget;

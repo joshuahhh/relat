@@ -86,6 +86,13 @@ export const wikipediaJs: Scenario = {
         "title", page.okv["title"].str;
         "extract", page.okv["extract"].str }
     `,
+  }, {
+    description: "titles and extracts of pages (w/sugar)?",
+    code: normalizeIndent`
+      { page: root.<query>.<pages>.<_> |
+        "title", page.<title>.str;
+        "extract", page.<extract>.str }
+    `,
   }],
   inspectableValues: wikipediaObjDB.idToObj,
 };
