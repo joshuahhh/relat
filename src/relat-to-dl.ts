@@ -617,6 +617,37 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           },
         ],
       };
+    } else if (exp.type === 'unary' && exp.op === '[_]') {
+      /***********************
+       * WILDCAR APPLICATION * (hacky stopgap)
+       ***********************/
+      const operandResult = translate(exp.operand, env);
+      if (operandResult.intSlots.length === 0) {
+        throw new Error(`Cannot apply wildcard to relation with arity 0`);
+      }
+      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
+      const intExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: operandNamedSlots.slice(1),
+        extSlots: getExtSlots(env.scope),
+      };
+      return {
+        ...intExt,
+        program: [
+          ...operandResult.program,
+          '',
+          comment(`${intExt.relName}: ${rangeString(exp.range)} (wildcard application)`),
+          decl(intExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(intExt, operandNamedSlots.slice(1)),
+            body: [
+              atom(operandResult, [ unnamedDLVar, ...operandNamedSlots.slice(1) ]),
+              ...env.constraint,
+            ],
+          },
+        ],
+      };
     } else if (exp.type === 'let') {
       /*******
        * LET *

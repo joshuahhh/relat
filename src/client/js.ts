@@ -7,8 +7,8 @@ export type JsObjDB = {
     root: Relation,
     any: Relation,
     okv: Relation,
-    string: Relation,
-    number: Relation,
+    str: Relation,
+    num: Relation,
   },
   idToObj: Map<string, any>,
   rootId: string,
@@ -48,7 +48,7 @@ export function mkJsObjDB(obj: any): JsObjDB {
         okv.tuples.push([id, key, valueId]);
       }
     } else if (typeof obj === 'string') {
-      string.tuples.push([id, obj]);
+      string.tuples.push([id, JSON.stringify(obj)]);
     } else if (typeof obj === 'number') {
       number.tuples.push([id, obj]);
     } else {
@@ -70,5 +70,5 @@ export function mkJsObjDB(obj: any): JsObjDB {
     tuples: [...objToId.values()].map(obj => [obj]),
   };
 
-  return { inputs: {root, any, okv, string, number}, idToObj, rootId };
+  return { inputs: {root, any, okv, str: string, num: number}, idToObj, rootId };
 }

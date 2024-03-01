@@ -138,6 +138,13 @@ describe("runRelat", () => {
     expect(output).toEqual({ types: ["number"], tuples: [[0]] });
   });
 
+  it("wildcard application", async () => {
+    const rel: Relation = { types: ["number", "number"], tuples: [[100, 1], [200, 2]] };
+    const output = await runRelat("rel[_]", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[1], [2]] });
+  });
+
+
   it("basically works", async () => {
     const hasChildRoundAbout = await runRelat(
       `{x : isPerson | some x.hasChild}`,

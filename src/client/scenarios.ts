@@ -1,3 +1,4 @@
+import { normalizeIndent } from "@engraft/shared/lib/normalizeIndent.js"
 import { Relation } from "../souffle-run.js";
 import { mkJsObjDB } from "./js.js";
 import moviesInputs from "./movies-inputs.json";
@@ -18,19 +19,19 @@ export const movies: Scenario = {
   inputs: moviesInputs as any,
   examples: [{
     description: "how many movies of each genre?",
-    code: "{genre: isTitle.hasGenre | #hasGenre.genre}",
+    code: "{genre: hasGenre[_] | #hasGenre.genre}",
   }, {
     description: "which directors act in their movies?",
     code: "{x: isTitle | x.hasActor & x.hasDirector}",
   }, {
     description: "how many actors?",
-    code: "#isTitle.hasActor",
+    code: "#hasActor[_]",
   }, {
     description: "how many actors are connected with Vin Diesel?",
     code: "#'Vin Diesel'.^(~hasActor.hasActor)",
   }, {
     description: "shortest runtime by genre?",
-    code: "{genre: isTitle.hasGenre | min ~hasGenre[genre].hasRuntimeMin}",
+    code: "{genre: hasGenre[_] | min ~hasGenre[genre].hasRuntimeMin}",
   // }, {
   //   description: "which pairs act together a lot?",
   //   code: "let actors = isTitle.hasActor | #{a1: actors | {a2: actors | a1, a2}}",
@@ -79,8 +80,12 @@ export const wikipediaJs: Scenario = {
     description: "root keys & values?",
     code: "root.okv",
   }, {
-    description: "something more interesting TBD",
-    code: 'root.okv["query"].okv["pages"].okv',
+    description: "titles and extracts of pages?",
+    code: normalizeIndent`
+      { page: root.okv["query"].okv["pages"].okv[_] |
+        "title", page.okv["title"].str;
+        "extract", page.okv["extract"].str }
+    `,
   }],
   inspectableValues: wikipediaObjDB.idToObj,
 };

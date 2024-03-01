@@ -113,7 +113,7 @@ export const Root = memo(() => {
               <div className='italic'>
                 {example.description}
               </div>
-              <div className='ml-4 font-mono'>
+              <div className='ml-4 font-mono whitespace-pre'>
                 {example.code}
               </div>
             </button>
@@ -121,7 +121,8 @@ export const Root = memo(() => {
         </div>
         <div className='h-4'/>
         <h2 className='text-xl font-bold'>code</h2>
-        <textarea className='p-4 font-mono bg-gray-800'
+        <textarea className='p-4 font-mono bg-gray-800 whitespace-pre'
+          spellCheck={false}
           value={code} onChange={e => {
             setCode(e.target.value);
             e.target.style.minHeight = 'auto';

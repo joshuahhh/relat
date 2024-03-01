@@ -24,7 +24,7 @@ export type Expression<Meta = {range: Range}> = Meta & (
     }
   | {
       type: 'unary',
-      op: 'some' | 'not' | '#' | '^' | '*' | '~' | 'min' | 'max' | 'sum', // 'some' | 'no' | 'lone' | 'one',
+      op: 'some' | 'not' | '#' | '^' | '*' | '~' | 'min' | 'max' | 'sum' | '[_]', // 'some' | 'no' | 'lone' | 'one',
       operand: Expression<Meta>,
     }
   | {

@@ -4,9 +4,8 @@
     return rights.reduce((left, right) => ({ type: "binary", op, left, right, range }), left);
   }
 
-  function associateLeftWithOps(left, rights, range) {
-    // TODO: fix ranges?
-    return rights.reduce((left, [op, right]) => ({ type: "binary", op, left, right, range }), left);
+  function associateLeftWithFuncs(left, rights) {
+    return rights.reduce((left, right) => right(left), left);
   }
 
   function resolveSugar(op) {
@@ -57,9 +56,15 @@ E4
   / E5
 
 E5
-  = left:E6 rights:(_ "[" _ right:Expression _ "]" { return ["[]", right] }
-                     / _ "." _ right:E6 { return [".", right] })*
-    { return associateLeftWithOps(left, rights, range()); }
+  = left:E6 rights:(
+        _ "[" _ "_" _ "]"
+        { return (operand) => ({ type: "unary", op: "[_]", operand, range: range() }); }
+      / _ "[" _ right:Expression _ "]"
+        { return (left) => ({ type: "binary", op: "[]", left, right, range: range() }); }
+      / _ "." _ right:E6
+        { return (left) => ({ type: "binary", op: ".", left, right, range: range() }); }
+    )*
+    { return associateLeftWithFuncs(left, rights); }
 
 E6
   = op:("^" / "*" / "~") _ operand:E6
