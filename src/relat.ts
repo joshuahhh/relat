@@ -93,3 +93,15 @@ export function toSexpr<Meta>(expr: Expression<Meta>): string {
       assertNever(expr);
   }
 }
+
+type UnaryOp = (Expression<{}> & { type: "unary" })["op"];
+type BinaryOp = (Expression<{}> & { type: "binary" })["op"];
+export function o(op: UnaryOp, operand: Expression<{}>): Expression<{}>;
+export function o(op: BinaryOp, left: Expression<{}>, right: Expression<{}>): Expression<{}>;
+export function o(op: UnaryOp | BinaryOp, leftOrOperand: Expression<{}>, right?: Expression<{}>): Expression<{}> {
+  if (right === undefined) {
+    return { type: "unary", op: op as UnaryOp, operand: leftOrOperand };
+  } else {
+    return { type: "binary", op: op as BinaryOp, left: leftOrOperand, right };
+  }
+}

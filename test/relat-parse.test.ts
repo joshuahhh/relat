@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseRelat } from "../src/relat-parse.js";
-import { Expression, stripMeta } from "../src/relat.js";
+import { Expression, o, stripMeta } from "../src/relat.js";
+
 
 describe("parseRelat", () => {
   const x: Expression<{}> = { type: "identifier", name: "x" };
@@ -12,29 +13,29 @@ describe("parseRelat", () => {
     // precedence. idk.
 
     // E1
-    ["some x", { type: "unary", op: "some", operand: x }],
-    ["not x", { type: "unary", op: "not", operand: x }],
+    ["some x", o("some", x)],
+    ["not x", o("not", x)],
     // E2
-    ["x = y", { type: "binary", op: "=", left: x, right: y }],
-    ["x < y", { type: "binary", op: "<", left: x, right: y }],
-    ["x > y", { type: "binary", op: ">", left: x, right: y }],
-    ["x =< y", { type: "binary", op: "=<", left: x, right: y }],
-    ["x >= y", { type: "binary", op: ">=", left: x, right: y }],
+    ["x = y", o("=", x, y)],
+    ["x < y", o("<", x, y)],
+    ["x > y", o(">", x, y)],
+    ["x =< y", o("=<", x, y)],
+    ["x >= y", o(">=", x, y)],
     // E3
-    ["x ; y", { type: "binary", op: ";", left: x, right: y }],
-    ["x ; y ; z", { type: "binary", op: ";", left: { type: "binary", op: ";", left: x, right: y }, right: z }],
+    ["x ; y", o(";", x, y)],
+    ["x ; y ; z", o(";", o(";", x, y), z)],
     // E4
-    ["#x", { type: "unary", op: "#", operand: x }],
+    ["#x", o("#", x)],
     // E4b
-    ["x & y", { type: "binary", op: "&", left: x, right: y }],
-    ["x & y & z", { type: "binary", op: "&", left: { type: "binary", op: "&", left: x, right: y }, right: z }],
+    ["x & y", o("&", x, y)],
+    ["x & y & z", o("&", o("&", x, y), z)],
     // E5
-    ["x . y", { type: "binary", op: ".", left: x, right: y }],
-    ["x . y . z", { type: "binary", op: ".", left: { type: "binary", op: ".", left: x, right: y }, right: z }],
+    ["x . y", o(".", x, y)],
+    ["x . y . z", o(".", o(".", x, y), z)],
     // E6
-    ["^x", { type: "unary", op: "^", operand: x }],
-    ["*x", { type: "unary", op: "*", operand: x }],
-    ["~x", { type: "unary", op: "~", operand: x }],
+    ["^x", o("^", x)],
+    ["*x", o("*", x)],
+    ["~x", o("~", x)],
     ["let x = y | z", { type: "let", variable: "x", value: y, body: z }],
     ["(x)", x],
     ["{ x : y | z }", { type: "comprehension", variable: "x", constraint: y, body: z }],
@@ -44,42 +45,36 @@ describe("parseRelat", () => {
     ["iden", { type: "identifier", name: "iden" }],
     ["`3 * x`", { type: "formula", formula: "3 * x" }],
     // NEW
-    ["x[y]", { type: "binary", op: "[]", left: x, right: y }],
-    ["x-y", { type: "binary", op: "-", left: x, right: y }],
-    ["min x", { type: "unary", op: "min", operand: x }],
-    ["max x", { type: "unary", op: "max", operand: x }],
-    ["sum x", { type: "unary", op: "sum", operand: x }],
-    ["Σx", { type: "unary", op: "sum", operand: x }],
-    ["x[_]", { type: "unary", op: "[_]", operand: x }],
+    ["x[y]", o("[]", x, y)],
+    ["x-y", o("-", x, y)],
+    ["min x", o("min", x)],
+    ["max x", o("max", x)],
+    ["sum x", o("sum", x)],
+    ["Σx", o("sum", x)],
+    ["x[_]", o("[_]", x)],
 
     // compounds
-    ["some not x", { type: "unary", op: "some", operand: { type: "unary", op: "not", operand: x } }],
-    ["not some x", { type: "unary", op: "not", operand: { type: "unary", op: "some", operand: x } }],
-    ["*x;y", { type: "binary", op: ";", left: { type: "unary", op: "*", operand: x }, right: y }],
-    ["*x.y", { type: "binary", op: ".", left: { type: "unary", op: "*", operand: x }, right: y }],
-    ["#x.y", { type: "unary", op: "#", operand: { type: "binary", op: ".", left: x, right: y } }],
-    ["some x.y", { type: "unary", op: "some", operand: { type: "binary", op: ".", left: x, right: y } }],
-    ["some x & y", { type: "binary", op: "&", left: { type: "unary", op: "some", operand: x }, right: y }],
-    ["x[y.z]", { type: "binary", op: "[]", left: x, right: { type: "binary", op: ".", left: y, right: z } }],
-    ["x[y;z]", { type: "binary", op: "[]", left: x, right: { type: "binary", op: ";", left: y, right: z } }],
-    ["some x[y]", { type: "unary", op: "some", operand: { type: "binary", op: "[]", left: x, right: y } }],
-    ["x.y[z]", { type: "binary", op: "[]", left: { type: "binary", op: ".", left: x, right: y }, right: z }],
-    ["x[y][z]", { type: "binary", op: "[]", left: { type: "binary", op: "[]", left: x, right: y }, right: z }],
-    ["x[y].z", { type: "binary", op: ".", left: { type: "binary", op: "[]", left: x, right: y }, right: z }],
-    ["x-y-z", {type: "binary", op: "-", left: { type: "binary", op: "-", left: x, right: y }, right: z }],
-    ["Σ x.y", { type: "unary", op: "sum", operand: { type: "binary", op: ".", left: x, right: y } }],
-    ["#x > y", { type: "binary", op: ">", left: { type: "unary", op: "#", operand: x }, right: y }],
-    ["x[_].y", { type: "binary", op: ".", left: { type: "unary", op: "[_]", operand: x }, right: y }],
-    ["x[_][y]", { type: "binary", op: "[]", left: { type: "unary", op: "[_]", operand: x }, right: y }],
-    ["x[y][_]", { type: "unary", op: "[_]", operand: { type: "binary", op: "[]", left: x, right: y } }],
-    ["x.y[_]", { type: "unary", op: "[_]", operand: { type: "binary", op: ".", left: x, right: y } }],
-    ["#x.y > #x.y.z",
-      { type: "binary", op: ">",
-        left: {
-          type: "unary", op: "#", operand: { type: "binary", op: ".", left: x, right: y } },
-        right: {
-          type: "unary", op: "#", operand: { type: "binary", op: ".", left: { type: "binary", op: ".", left: x, right: y }, right: z } } },
-    ]
+    ["some not x", o("some", o("not", x))],
+    ["not some x", o("not", o("some", x))],
+    ["*x;y", o(";", o("*", x), y)],
+    ["*x.y", o(".", o("*", x), y)],
+    ["#x.y", o("#", o(".", x, y))],
+    ["some x.y", o("some", o(".", x, y))],
+    ["some x & y", o("&", o("some", x), y)],
+    ["x[y.z]", o("[]", x, o(".", y, z))],
+    ["x[y;z]", o("[]", x, o(";", y, z))],
+    ["some x[y]", o("some", o("[]", x, y))],
+    ["x.y[z]", o("[]", o(".", x, y), z)],
+    ["x[y][z]", o("[]", o("[]", x, y), z)],
+    ["x[y].z", o(".", o("[]", x, y), z)],
+    ["x-y-z", o("-", o("-", x, y), z)],
+    ["Σ x.y", o("sum", o(".", x, y))],
+    ["#x > y", o(">", o("#", x), y)],
+    ["x[_].y", o(".", o("[_]", x), y)],
+    ["x[_][y]", o("[]", o("[_]", x), y)],
+    ["x[y][_]", o("[_]", o("[]", x, y))],
+    ["x.y[_]", o("[_]", o(".", x, y))],
+    ["#x.y > #x.y.z", o(">", o("#", o(".", x, y)), o("#", o(".", o(".", x, y), z)))],
   ];
 
   for (const [input, expected] of expectedParsings) {
