@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import { ReactNode, memo, useEffect, useState } from 'react';
+import { ReactNode, memo, useEffect, useMemo, useState } from 'react';
 import { programToString } from '../dl.js';
 import { entries, fromEntries } from '../misc.js';
 import { SyntaxError } from '../relat-grammar/relat-grammar.js';
@@ -169,13 +169,11 @@ export const Root = memo(() => {
         <h2 className='text-xl font-bold'>code ast</h2>
         { lastGoodProcessed === null
         ? <p>processing...</p>
-        : <details>
-            <summary>
-              <pre className='inline-block'>
-                {toSexpr(lastGoodProcessed.ast)}
-              </pre>
+        : <details className='flex flex-col'>
+            <summary className='flex whitespace-pre-wrap font-mono'>
+              {toSexpr(lastGoodProcessed.ast)}
             </summary>
-            <pre>
+            <pre className='overflow-auto min-h-0'>
               {JSON.stringify(stripMeta(lastGoodProcessed.ast), null, 2)}
             </pre>
           </details>
@@ -205,12 +203,91 @@ const DatalogView = memo(({ program }: { program: string }) => {
   const lines = program.split('\n');
   return <div>
     {lines.map((line, i) => {
-      return <pre key={i} className={clsx("whitespace-pre-wrap -indent-8 pl-8", (line.startsWith("//") || line.startsWith(".")) && "opacity-50")}>
-        {line || ' '}
-      </pre>
+      const isRule = line.includes(' :- ');
+      if (isRule) {
+        return <DatalogRuleView key={i} ruleLine={line} />;
+      } else {
+        return <pre key={i} className="whitespace-pre-wrap -indent-8 pl-8 opacity-50">
+          {line || ' '}
+        </pre>
+      }
     })}
   </div>;
 });
+
+const DatalogRuleView = memo((props: { ruleLine: string }) => {
+  const { ruleLine } = props;
+  const pairs = useMemo(() => {
+    // const [head, _body] = ruleLine.split(' :- ');
+    const relationBodies = ruleLine.matchAll(/(?<=[a-zA-Z0-9_])\(([^)]+)\)/g);
+    const vars = _.difference(_.uniq(_.flatMap([...relationBodies], ([, body]) => body.split(', '))), ['_']);
+    // const vars = [];
+    const colors = ['text-sky-400', 'text-orange-300', 'text-lime-300', 'text-rose-300']
+    return vars.map((v, i) => ({
+      substr: `(?<![a-zA-Z0-9_])${v}(?![a-zA-Z0-9_])`, className: 'inline ' + colors[i % colors.length]
+    }));
+  }, [ruleLine])
+
+  return <pre className="whitespace-pre-wrap -indent-8 pl-8">
+    <HighlightSubstrings str={ruleLine} pairs={pairs} />
+  </pre>;
+});
+
+interface SubstrClassPair {
+  substr: string;
+  className: string;
+}
+
+interface HighlightSubstringsProps {
+  str: string;
+  pairs: SubstrClassPair[];
+}
+
+const HighlightSubstrings: React.FC<HighlightSubstringsProps> = ({ str, pairs }) => {
+  let elements: JSX.Element[] = [];
+  let occurrences: { index: number; length: number; className: string }[] = [];
+
+  // Find all occurrences of substrings and store them with their class names
+  pairs.forEach(pair => {
+    const regex = new RegExp(pair.substr, 'g');
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(str)) !== null) {
+      occurrences.push({ index: match.index, length: match[0].length, className: pair.className });
+    }
+  });
+
+  // Sort occurrences by their starting index
+  occurrences.sort((a, b) => a.index - b.index);
+
+  let lastIndex = 0; // Track the index of the last processed character
+
+  // Process each occurrence
+  occurrences.forEach(occurrence => {
+    // Add unprocessed text before the current occurrence
+    if (occurrence.index > lastIndex) {
+      elements.push(<span key={`text-${lastIndex}`}>{str.substring(lastIndex, occurrence.index)}</span>);
+    }
+
+    // Add the highlighted substring
+    elements.push(
+      <div className={occurrence.className} key={`highlight-${occurrence.index}`}>
+        {str.substring(occurrence.index, occurrence.index + occurrence.length)}
+      </div>
+    );
+
+    // Update the lastIndex to the end of the current occurrence
+    lastIndex = occurrence.index + occurrence.length;
+  });
+
+  // Add any remaining text after the last occurrence
+  if (lastIndex < str.length) {
+    elements.push(<span key={`text-${lastIndex}`}>{str.substring(lastIndex)}</span>);
+  }
+
+  return <>{elements}</>;
+};
+
 
 const RelationView = memo((props: {
   relation: Relation,
