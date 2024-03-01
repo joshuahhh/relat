@@ -146,6 +146,9 @@ describe("runRelat", () => {
 
 
   it("basically works", async () => {
+    // NOTE: One important thing this tests is nested comprehensions, which can
+    // actually go wrong in interesting ways. Please keep that around.
+
     const hasChildRoundAbout = await runRelat(
       `{x : isPerson | some x.hasChild}`,
       simpleFamily.inputs
