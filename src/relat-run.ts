@@ -25,7 +25,7 @@ export async function runRelat(code: string, inputs: Record<string, Relation | a
 
   const result = translate(
     parseRelat(code),
-    { nextIndex: mkNextIndex(), constraint: [], scope }
+    { nextIndex: mkNextIndex(), scope }
   );
 
   const program = translationResultToFullProgram(result, scope);
