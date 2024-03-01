@@ -88,5 +88,5 @@ _ "whitespace"
   = [ \t\n\r]*
 
 Identifier
-  = name:$([a-z][a-zA-Z0-9]*)
+  = name:$([a-zA-Z_][a-zA-Z_0-9]*)
     { return name; }

@@ -1,5 +1,7 @@
 import { Relation } from "../souffle-run.js";
+import { mkJsObjDB } from "./js.js";
 import moviesInputs from "./movies-inputs.json";
+import wikipedia from './wikipedia.json';
 
 export type Scenario = {
   name: string,
@@ -8,6 +10,7 @@ export type Scenario = {
     description: string,
     code: string,
   }[],
+  inspectableValues?: Map<any, any>,
 }
 
 export const movies: Scenario = {
@@ -67,7 +70,23 @@ export const simpleFamily: Scenario = {
   }],
 };
 
+const wikipediaObjDB = mkJsObjDB(wikipedia);
+
+export const wikipediaJs: Scenario = {
+  name: "Wikipedia response",
+  inputs: wikipediaObjDB.inputs,
+  examples: [{
+    description: "root keys & values?",
+    code: "root.okv",
+  }, {
+    description: "something more interesting TBD",
+    code: 'root.okv["query"].okv["pages"].okv',
+  }],
+  inspectableValues: wikipediaObjDB.idToObj,
+};
+
 export const scenarios: Scenario[] = [
   movies,
   simpleFamily,
+  wikipediaJs,
 ];

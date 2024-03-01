@@ -31,11 +31,12 @@ export async function runRelat(code: string, inputs: Record<string, Relation | a
   const program = translationResultToFullProgram(result, scope);
   const programString = programToString(program);
 
-  // console.log("runRelat2", inputs, inputRelations)
+  const output = await runSouffle(programString, inputs);
 
-  // console.log(programString)
-
-  const output = await runSouffle(programString, inputs)
-
-  return output[result.relName]
+  return {
+    ...output[result.relName],
+    // We know the actual signature, so substitute that in.
+    // (Helps if, say, the result set is empty.)
+    types: result.intSlots.map(slot => slot.type),
+  };
 }

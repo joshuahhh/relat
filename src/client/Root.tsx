@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import { memo, useEffect, useState } from 'react';
+import { ReactNode, memo, useEffect, useState } from 'react';
 import { programToString } from '../dl.js';
 import { entries, fromEntries } from '../misc.js';
 import { SyntaxError } from '../relat-grammar/relat-grammar.js';
@@ -10,6 +10,7 @@ import { stripMeta, toSexpr } from '../relat.js';
 import { Relation, inferTypes } from '../souffle-run.js';
 import clsx from 'clsx';
 import { Scenario, scenarios } from './scenarios.js';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/Tooltip.js';
 
 async function process(code: string, inputs: Record<string, Relation>) {
   try {
@@ -52,7 +53,6 @@ async function process(code: string, inputs: Record<string, Relation>) {
 export const Root = memo(() => {
   const [ scenario, setScenario ] = useState<Scenario>(scenarios[0]);
   const [ code, setCode ] = useState(scenario.examples[0].code);
-  // const [ textAreaHeight, setTextAreaHeight ] = useState(100);
 
   const [ processed, setProcessed ] = useState<Awaited<ReturnType<typeof process>> | null>(null);
   const [ lastGoodProcessed, setLastGoodProcessed ] = useState<
@@ -94,7 +94,7 @@ export const Root = memo(() => {
           <div key={name} className="flex flex-col items-start w-fit">
             <h3 className='text-lg font-bold'>{name}</h3>
             <div className='overflow-y-scroll w-fit'>
-              <RelationView relation={relation} />
+              <RelationView relation={relation} inspectableValues={scenario.inspectableValues} />
             </div>
           </div>
           <div className='bg-gray-500 min-w-px h-full mx-2'/>
@@ -121,7 +121,7 @@ export const Root = memo(() => {
         </div>
         <div className='h-4'/>
         <h2 className='text-xl font-bold'>code</h2>
-        <textarea className='p-4 font-mono'
+        <textarea className='p-4 font-mono bg-gray-800'
           value={code} onChange={e => {
             setCode(e.target.value);
             e.target.style.minHeight = 'auto';
@@ -151,7 +151,7 @@ export const Root = memo(() => {
           { lastGoodProcessed === null
           ? <p>processing...</p>
           : <div className='overflow-y-scroll'>
-              <RelationView relation={lastGoodProcessed.output} />
+              <RelationView relation={lastGoodProcessed.output} inspectableValues={scenario.inspectableValues} />
             </div>
           }
         </div>
@@ -211,14 +211,23 @@ const DatalogView = memo(({ program }: { program: string }) => {
   </div>;
 });
 
-const RelationView = memo(({ relation }: { relation: Relation }) => {
+const RelationView = memo((props: {
+  relation: Relation,
+  inspectableValues?: Map<any, any>,
+}) => {
+  const { relation, inspectableValues = new Map() } = props;
   if (relation.types.length === 0) {
     if (relation.tuples.length === 0) {
-      return <div>FALSE</div>;
+      return <div>false ({"{}"})</div>;
     } else {
-      return <div>TRUE</div>;
+      return <div>true ({"{()}"})</div>;
     }
   }
+
+  if (relation.tuples.length === 0) {
+    return <div>empty relation with signature ({relation.types.join(", ")})</div>;
+  }
+
   const MAX_TUPLES = 20;
   const tuplesToShow = relation.tuples.slice(0, MAX_TUPLES);
   const numTuplesHidden = relation.tuples.length - tuplesToShow.length;
@@ -227,12 +236,27 @@ const RelationView = memo(({ relation }: { relation: Relation }) => {
       <tbody>
         {tuplesToShow.map((row, i) =>
           <tr key={i}>
-            {row.map((value, j) =>
-              <td key={j} className='px-1 align-top whitespace-nowrap'
-                style={{borderBottom: '1px solid hsl(0, 0%, 20%)', ...j > 0 && {borderLeft: '1px solid hsl(0, 0%, 50%)'}}}>
-                {"" + value}
+            {row.map((value, j) => {
+              let content: ReactNode = String(value);
+              const maybeInspectableValue = inspectableValues.get(value);
+              if (maybeInspectableValue !== undefined) {
+                content = <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger className='underline decoration-dotted'>{content}</TooltipTrigger>
+                    <TooltipContent>
+                      <pre className='text-xs max-w-xl max-h-96 overflow-auto'>
+                        {JSON.stringify(inspectableValues.get(value), null, 2)}
+                      </pre>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>;
+              }
+              return <td key={j} className='px-1 align-top whitespace-nowrap overflow-ellipsis overflow-hidden max-w-xl'
+                style={{borderBottom: '1px solid hsl(0, 0%, 20%)', ...j > 0 && {borderLeft: '1px solid hsl(0, 0%, 50%)'}}}
+              >
+                {content}
               </td>
-            )}
+            })}
           </tr>
         )}
       </tbody>

@@ -1,0 +1,114 @@
+{
+  "batchcomplete": "",
+  "continue": {
+    "grncontinue": "0.651562367265|0.651563589832|4547265|0",
+    "continue": "grncontinue||"
+  },
+  "warnings": {
+    "extracts": {
+      "*": "HTML may be malformed and/or unbalanced and may omit inline images. Use at your own risk. Known problems are listed at https://www.mediawiki.org/wiki/Special:MyLanguage/Extension:TextExtracts#Caveats."
+    }
+  },
+  "query": {
+    "pages": {
+      "51097720": {
+        "pageid": 51097720,
+        "ns": 0,
+        "title": "Awdiinle massacre",
+        "contentmodel": "wikitext",
+        "pagelanguage": "en",
+        "pagelanguagehtmlcode": "en",
+        "pagelanguagedir": "ltr",
+        "touched": "2024-02-26T18:32:12Z",
+        "lastrevid": 1189284610,
+        "length": 2707,
+        "fullurl": "https://en.wikipedia.org/wiki/Awdiinle_massacre",
+        "editurl": "https://en.wikipedia.org/w/index.php?title=Awdiinle_massacre&action=edit",
+        "canonicalurl": "https://en.wikipedia.org/wiki/Awdiinle_massacre",
+        "extract": "<p>The <b>Awdiinle Massacre</b> was a massacre of over three hundred Somali civilians carried out by Ethiopian soldiers in Somalia as part of the African Union Mission to Somalia on Sunday July 17, 2016. The massacre occurred in the village of Awdiinle, 30\u00a0km west of Baidoa.</p>"
+      },
+      "22138514": {
+        "pageid": 22138514,
+        "ns": 0,
+        "title": "Valur G\u00edslason",
+        "contentmodel": "wikitext",
+        "pagelanguage": "en",
+        "pagelanguagehtmlcode": "en",
+        "pagelanguagedir": "ltr",
+        "touched": "2024-02-23T05:04:49Z",
+        "lastrevid": 1164713505,
+        "length": 4883,
+        "fullurl": "https://en.wikipedia.org/wiki/Valur_G%C3%ADslason",
+        "editurl": "https://en.wikipedia.org/w/index.php?title=Valur_G%C3%ADslason&action=edit",
+        "canonicalurl": "https://en.wikipedia.org/wiki/Valur_G%C3%ADslason",
+        "extract": "<p class=\"mw-empty-elt\">\n</p>\n<link rel=\"mw-deduplicated-inline-style\" href=\"mw-data:TemplateStyles:r1033289096\">\n<p><b>Valur Fannar G\u00edslason</b> (born 8 September 1977) is an Icelandic former footballer who played for a defender and midfielder.\n</p>"
+      },
+      "55383649": {
+        "pageid": 55383649,
+        "ns": 0,
+        "title": "Taper burn mark",
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Taper_burn_marks_-_Haddon_Hall_1.jpg/50px-Taper_burn_marks_-_Haddon_Hall_1.jpg",
+          "width": 50,
+          "height": 67
+        },
+        "pageimage": "Taper_burn_marks_-_Haddon_Hall_1.jpg",
+        "contentmodel": "wikitext",
+        "pagelanguage": "en",
+        "pagelanguagehtmlcode": "en",
+        "pagelanguagedir": "ltr",
+        "touched": "2024-02-23T06:17:23Z",
+        "lastrevid": 1155908111,
+        "length": 2081,
+        "fullurl": "https://en.wikipedia.org/wiki/Taper_burn_mark",
+        "editurl": "https://en.wikipedia.org/w/index.php?title=Taper_burn_mark&action=edit",
+        "canonicalurl": "https://en.wikipedia.org/wiki/Taper_burn_mark",
+        "extract": "<p><b>Taper burn marks</b> are deep flame shaped scorch marks often found on the timber beams of early modern houses. They were originally thought to have been accidental scorches from a taper candle, but research suggests that most marks may have been made deliberately, as there is clear patterning of the activity. They are theorised to have been made as part of a folk superstition, then thought to protect the building from fire and lightning.</p><p>They are often found around entrances to the home such as fireplaces, doors and windows.</p><p>Over 80 such marks have been discovered in the Tower of London.</p>"
+      },
+      "50722257": {
+        "pageid": 50722257,
+        "ns": 0,
+        "title": "Infanta Mar\u00eda de las Mercedes of Spain",
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Maria_de_las_Mercedes_de_Baviera_from_The_family_of_Ferdinand_Maria_of_Bavaria_%28cropped%29.jpg/50px-Maria_de_las_Mercedes_de_Baviera_from_The_family_of_Ferdinand_Maria_of_Bavaria_%28cropped%29.jpg",
+          "width": 50,
+          "height": 63
+        },
+        "pageimage": "Maria_de_las_Mercedes_de_Baviera_from_The_family_of_Ferdinand_Maria_of_Bavaria_(cropped).jpg",
+        "contentmodel": "wikitext",
+        "pagelanguage": "en",
+        "pagelanguagehtmlcode": "en",
+        "pagelanguagedir": "ltr",
+        "touched": "2024-02-29T23:19:41Z",
+        "lastrevid": 1202800300,
+        "length": 7640,
+        "fullurl": "https://en.wikipedia.org/wiki/Infanta_Mar%C3%ADa_de_las_Mercedes_of_Spain",
+        "editurl": "https://en.wikipedia.org/w/index.php?title=Infanta_Mar%C3%ADa_de_las_Mercedes_of_Spain&action=edit",
+        "canonicalurl": "https://en.wikipedia.org/wiki/Infanta_Mar%C3%ADa_de_las_Mercedes_of_Spain",
+        "extract": "<p><b>Princess Mar\u00eda de las Mercedes of Bavaria, Infanta of Spain</b> (3 October 1911 \u2013 11 September 1953) was a German-Spanish princess. She was the third wife of Georgian Prince Irakli Bagration of Mukhrani. Through her father, Prince Ferdinand of Bavaria, she was a member of the Bavarian House of Wittelsbach. Through her mother, Infanta Mar\u00eda Teresa of Spain, she was a granddaughter of Alfonso XII and niece of Alfonso XIII.</p>"
+      },
+      "45306010": {
+        "pageid": 45306010,
+        "ns": 0,
+        "title": "St Joseph's Convent, Taunton",
+        "thumbnail": {
+          "source": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/St_Joseph%27s_Convent%2C_Taunton.jpg/50px-St_Joseph%27s_Convent%2C_Taunton.jpg",
+          "width": 50,
+          "height": 32
+        },
+        "pageimage": "St_Joseph's_Convent,_Taunton.jpg",
+        "contentmodel": "wikitext",
+        "pagelanguage": "en",
+        "pagelanguagehtmlcode": "en",
+        "pagelanguagedir": "ltr",
+        "touched": "2024-02-24T14:02:09Z",
+        "lastrevid": 1082094344,
+        "length": 15091,
+        "fullurl": "https://en.wikipedia.org/wiki/St_Joseph%27s_Convent,_Taunton",
+        "editurl": "https://en.wikipedia.org/w/index.php?title=St_Joseph%27s_Convent,_Taunton&action=edit",
+        "canonicalurl": "https://en.wikipedia.org/wiki/St_Joseph%27s_Convent,_Taunton",
+        "extract": "<p class=\"mw-empty-elt\">\n\n</p>\n<p><b>St Joseph's Convent</b> is a complex of 18th- and 19th-century buildings in Taunton, Somerset, which were primarily used as a Roman Catholic convent, first by the Franciscans, and then Sisters of St. Joseph of Annecy. The buildings were sold out of the Catholic church in 1976, and were redeveloped as residential flats in 2005. The main building is designated by English Heritage as a Grade II* listed building, while the boundary walls on the west side are Grade II listed.\n</p><p>The main building was begun in 1772, as a free hospital for the poor, but funding ran out two years later, and it was completed as a private residence. In the early 19th century, it was bought by a group of Franciscan nuns, who moved from an unsatisfactory site in Winchester. The nuns carried out a number of additions and extensions to the building to make it more suitable for their needs. They moved out of Taunton in 1950 and sold the convent to the Sisters of St. Joseph, who continued to run a school on the site for the next twenty-six years.\n</p>"
+      }
+    }
+  }
+}
