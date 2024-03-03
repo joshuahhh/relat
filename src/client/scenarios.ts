@@ -102,11 +102,16 @@ export const hw4: Scenario = {
   name: "HW4",
   inputs: hw4Inputs,
   examples: [{
-    description: "how many people are there?",
-    code: "#person",
+    description: "1. descendents of Priscilla (etc)",
+    code: '"Priscilla".^parent_child <: person',
   }, {
-    description: "how many people are there?",
-    code: "#person",
+    description: "2. women & men with most children",
+    code: normalizeIndent`
+      let num_children = {x : person._ | #x.parent_child} |
+      let most_mothered = max female.num_children |
+      let most_fathered = max male.num_children |
+      num_children & (female, most_mothered ; male, most_fathered)
+    `,
   }],
 };
 

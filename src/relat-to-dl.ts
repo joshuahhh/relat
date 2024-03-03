@@ -218,6 +218,40 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         throw new Error(`Unknown identifier: ${exp.name}`);
       }
     } else if (exp.type === 'binary' && exp.op === '.') {
+      // TODO: extremely hacked in support for x._ & _.x
+      if (exp.left.type === 'identifier' && exp.left.name === '_') {
+        return translate({type: 'unary', op: '[_]', operand: exp.right, range: exp.range}, env);
+      }
+      if (exp.right.type === 'identifier' && exp.right.name === '_') {
+        const operandResult = translate(exp.left, env);
+        if (operandResult.intSlots.length === 0) {
+          throw new Error(`Cannot apply wildcard to relation with arity 0`);
+        }
+        const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
+        const intExt: IntExt = {
+          relName: `R${env.nextIndex()}`,
+          intSlots: operandNamedSlots.slice(0, -1),
+          extSlots: operandResult.extSlots,
+        };
+        return {
+          ...intExt,
+          program: [
+            ...operandResult.program,
+            '',
+            comment(`${intExt.relName}: ${rangeString(exp.range)} (wildcard application)`),
+            decl(intExt, env.scope),
+            {
+              type: 'rule',
+              head: atom(intExt, operandNamedSlots.slice(0, -1)),
+              body: [
+                atom(operandResult, [ ...operandNamedSlots.slice(0, -1), unnamedDLVar ]),
+                ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ],
+            },
+          ],
+        };
+      }
+
       /************
        * DOT-JOIN *
        ************/

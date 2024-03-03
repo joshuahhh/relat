@@ -184,6 +184,17 @@ describe("runRelat", () => {
     expect(output).toEqual({ types: ["number"], tuples: [[1], [2]] });
   });
 
+  it("prefix wildcard dot-join", async () => {
+    const rel: Relation = { types: ["number", "number"], tuples: [[100, 1], [200, 2]] };
+    const output = await runRelat("_.rel", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[1], [2]] });
+  });
+
+  it("suffix wildcard dot-join", async () => {
+    const rel: Relation = { types: ["number", "number"], tuples: [[100, 1], [200, 2]] };
+    const output = await runRelat("rel._", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[100], [200]] });
+  });
 
   it("basically works", async () => {
     // NOTE: One important thing this tests is nested comprehensions, which can
