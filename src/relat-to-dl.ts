@@ -101,6 +101,12 @@ function slotTypesMatch(slots1: IntSlot[], slots2: IntSlot[]): boolean {
   }
   return true;
 }
+function slotTypesPrefix(slots1: IntSlot[], slots2: IntSlot[]): boolean {
+  return slotTypesMatch(slots1, slots2.slice(0, slots1.length));
+}
+function slotTypesSuffix(slots1: IntSlot[], slots2: IntSlot[]): boolean {
+  return slotTypesMatch(slots1, slots2.slice(slots2.length - slots1.length));
+}
 
 // utility: common desire is to generate unique DL vars to go with an IntExt's
 // intSlots. here u go
@@ -606,11 +612,8 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       // result(B...) = left(A..., B...), right(A...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
-      if (leftResult.intSlots.length < rightResult.intSlots.length) {
-        throw new Error(`Cannot apply relation with ${rightResult.intSlots.length} arguments to relation with ${leftResult.intSlots.length} arguments`);
-      }
-      if (!slotTypesMatch(leftResult.intSlots.slice(0, rightResult.intSlots.length), rightResult.intSlots)) {
-        throw new Error(`Cannot apply relation with signature ${inspect(rightResult.intSlots)} to relation with signature ${inspect(leftResult.intSlots)}`);
+      if (!slotTypesPrefix(rightResult.intSlots, leftResult.intSlots)) {
+        throw new Error(`Cannot apply relation with signature ${inspect(leftResult.intSlots)} to relation with signature ${inspect(rightResult.intSlots)}`);
       }
       const leftNamedSlots = nameSlots(leftResult.intSlots, nextIndex);
       const resultNamedSlots = leftNamedSlots.slice(rightResult.intSlots.length);
@@ -664,6 +667,76 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             head: atom(intExt, operandNamedSlots.slice(1)),
             body: [
               atom(operandResult, [ unnamedDLVar, ...operandNamedSlots.slice(1) ]),
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
+            ],
+          },
+        ],
+      };
+    } else if (exp.type === 'binary' && exp.op === '<:') {
+      /***************
+       * PREFIX JOIN *
+       ***************/
+      // result(A..., B...) = left(A...), right(A..., B...)
+      const leftResult = translate(exp.left, env);
+      const rightResult = translate(exp.right, env);
+      if (!slotTypesPrefix(leftResult.intSlots, rightResult.intSlots)) {
+        throw new Error(`Cannot join relation with signature ${inspect(leftResult.intSlots)} as prefix of relation with signature ${inspect(rightResult.intSlots)}`);
+      }
+      const rightNamedSlots = nameSlots(rightResult.intSlots, nextIndex);
+      const intExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: rightNamedSlots,
+        extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
+      };
+      return {
+        ...intExt,
+        program: [
+          ...leftResult.program,
+          ...rightResult.program,
+          '',
+          comment(`${intExt.relName}: ${rangeString(exp.range)} (prefix join)`),
+          decl(intExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(intExt, rightNamedSlots),
+            body: [
+              atom(leftResult, rightNamedSlots.slice(0, leftResult.intSlots.length)),
+              atom(rightResult, rightNamedSlots),
+              ...constraintForExtSlots(intExt.extSlots, env.scope),
+            ],
+          },
+        ],
+      };
+    } else if (exp.type === 'binary' && exp.op === ':>') {
+      /***************
+       * SUFFIX JOIN *
+       ***************/
+      // result(A..., B...) = left(A..., B...), right(B...)
+      const leftResult = translate(exp.left, env);
+      const rightResult = translate(exp.right, env);
+      if (!slotTypesSuffix(rightResult.intSlots, leftResult.intSlots)) {
+        throw new Error(`Cannot join relation with signature ${inspect(rightResult.intSlots)} as suffix of relation with signature ${inspect(leftResult.intSlots)}`);
+      }
+      const leftNamedSlots = nameSlots(leftResult.intSlots, nextIndex);
+      const intExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: leftNamedSlots,
+        extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
+      };
+      return {
+        ...intExt,
+        program: [
+          ...leftResult.program,
+          ...rightResult.program,
+          '',
+          comment(`${intExt.relName}: ${rangeString(exp.range)} (suffix join)`),
+          decl(intExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(intExt, leftNamedSlots),
+            body: [
+              atom(leftResult, leftNamedSlots),
+              atom(rightResult, leftNamedSlots.slice(leftResult.intSlots.length - rightResult.intSlots.length)),
               ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
           },

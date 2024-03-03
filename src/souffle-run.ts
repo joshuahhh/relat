@@ -32,6 +32,14 @@ export function inferTypes(tuples: Relation | unknown[][]): Relation {
   };
 }
 
+export function emptyRelation(types: Type[]): Relation {
+  return { types, tuples: [] };
+}
+
+export function emptyLike(relation: Relation): Relation {
+  return emptyRelation(relation.types);
+}
+
 function parseIntOr(s: string) {
   const parsed = parseInt(s);
   return isNaN(parsed) ? s : parsed;

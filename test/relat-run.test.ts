@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { runRelat } from "../src/relat-run.js";
-import { Relation } from "../src/souffle-run.js";
 import { simpleFamily } from "../src/client/scenarios.js";
+import { runRelat } from "../src/relat-run.js";
+import { Relation, emptyLike, inferTypes } from "../src/souffle-run.js";
 
 describe("runRelat", () => {
   const TRUE: Relation = { types: [], tuples: [[]] };
@@ -105,6 +105,46 @@ describe("runRelat", () => {
     expect(output1).toEqual(TRUE);
     const output2 = await runRelat("rel[100][2]", { rel });
     expect(output2).toEqual(FALSE);
+  });
+
+  it("prefix join, single argument", async () => {
+    const rel = inferTypes([[100, 1], [200, 2]]);
+    const output = await runRelat("100 <: rel", { rel });
+    expect(output).toEqual(inferTypes([[100, 1]]));
+  });
+
+  it("prefix join, union argument", async () => {
+    const rel = inferTypes([[100, 1], [200, 2]]);
+    const output = await runRelat("(150; 200) <: rel", { rel });
+    expect(output).toEqual(inferTypes([[200, 2]]));
+  });
+
+  it("prefix join, product argument", async () => {
+    const rel = inferTypes([[100, 1], [200, 2]]);
+    const output1 = await runRelat("(100, 1) <: rel", { rel });
+    expect(output1).toEqual(inferTypes([[100, 1]]));
+    const output2 = await runRelat("(100, 2) <: rel", { rel });
+    expect(output2).toEqual(emptyLike(rel));
+  });
+
+  it("suffix join, single argument", async () => {
+    const rel = inferTypes([[100, 1], [200, 2]]);
+    const output = await runRelat("rel :> 1", { rel });
+    expect(output).toEqual(inferTypes([[100, 1]]));
+  });
+
+  it("suffix join, union argument", async () => {
+    const rel = inferTypes([[100, 1], [200, 2]]);
+    const output = await runRelat("rel :> (2; 3)", { rel });
+    expect(output).toEqual(inferTypes([[200, 2]]));
+  });
+
+  it("suffix join, product argument", async () => {
+    const rel = inferTypes([[100, 1], [200, 2]]);
+    const output1 = await runRelat("rel :> (100, 1)", { rel });
+    expect(output1).toEqual(inferTypes([[100, 1]]));
+    const output2 = await runRelat("rel :> (100, 2)", { rel });
+    expect(output2).toEqual(emptyLike(rel));
   });
 
   it("difference", async () => {

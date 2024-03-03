@@ -52,6 +52,8 @@ describe("parseRelat", () => {
     ["sum x", o("sum", x)],
     ["Σx", o("sum", x)],
     ["x[_]", o("[_]", x)],
+    ["x <: y", o("<:", x, y)],
+    ["x :> y", o(":>", x, y)],
 
     // compounds
     ["some not x", o("some", o("not", x))],
@@ -75,6 +77,7 @@ describe("parseRelat", () => {
     ["x[y][_]", o("[_]", o("[]", x, y))],
     ["x.y[_]", o("[_]", o(".", x, y))],
     ["#x.y > #x.y.z", o(">", o("#", o(".", x, y)), o("#", o(".", o(".", x, y), z)))],
+    ["x.y <: z", o("<:", o(".", x, y), z)],
   ];
 
   for (const [input, expected] of expectedParsings) {

@@ -56,6 +56,11 @@ E4
   / E5
 
 E5
+  = left: E5b _ op:("<:" / ":>") _ right:E5b
+    { return { type: "binary", op, left, right, range: range() }; }
+  / E5b
+
+E5b
   = left:E6 rights:(
         _ "[" _ "_" _ "]"
         { return (operand) => ({ type: "unary", op: "[_]", operand, range: range() }); }
