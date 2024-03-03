@@ -215,6 +215,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /************
        * DOT-JOIN *
        ************/
+      // result(A..., C...) = left(A..., B), right(B, C...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (leftResult.intSlots.length === 0) {
@@ -454,6 +455,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /*************
        * TRANSPOSE *
        *************/
+      // result(B, A) :- operand(A, B)
       const operandResult = translate(exp.operand, env);
       if (operandResult.intSlots.length !== 2) {
         throw new Error(`Transpose must have arity 2`);
@@ -485,6 +487,8 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /*********
        * UNION *
        *********/
+      // result(A...) :- left(A...)
+      // result(A...) :- right(A...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (!slotTypesMatch(leftResult.intSlots, rightResult.intSlots)) {
@@ -526,6 +530,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /****************
        * INTERSECTION *
        ****************/
+      // result(A...) :- left(A...), right(A...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (!slotTypesMatch(leftResult.intSlots, rightResult.intSlots)) {
@@ -560,6 +565,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /**************
        * DIFFERENCE *
        **************/
+      // result(A...) = left(A...), !right(A...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (!slotTypesMatch(leftResult.intSlots, rightResult.intSlots)) {
@@ -597,6 +603,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /***************
        * APPLICATION *
        ***************/
+      // result(B...) = left(A..., B...), right(A...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (leftResult.intSlots.length < rightResult.intSlots.length) {
@@ -632,9 +639,9 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         ],
       };
     } else if (exp.type === 'unary' && exp.op === '[_]') {
-      /***********************
-       * WILDCAR APPLICATION * (hacky stopgap)
-       ***********************/
+      /************************
+       * WILDCARD APPLICATION * (hacky stopgap)
+       ************************/
       const operandResult = translate(exp.operand, env);
       if (operandResult.intSlots.length === 0) {
         throw new Error(`Cannot apply wildcard to relation with arity 0`);
