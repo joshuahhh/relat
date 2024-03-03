@@ -1,6 +1,6 @@
 import { DSVRowArray, autoType, csvParse } from 'd3-dsv';
 import fsP from 'node:fs/promises';
-import { inferTypes } from "../souffle-run.js";
+import { inferTypes } from "../../souffle-run.js";
 import stringify from 'json-stringify-pretty-compact';
 
 

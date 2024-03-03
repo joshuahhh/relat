@@ -1,8 +1,9 @@
 import { normalizeIndent } from "@engraft/shared/lib/normalizeIndent.js"
 import { Relation } from "../souffle-run.js";
 import { mkJsObjDB } from "./js.js";
-import moviesInputs from "./movies-inputs.json";
-import wikipedia from './wikipedia.json';
+import moviesInputs from "./scenario-data/movies.json";
+import wikipedia from './scenario-data/wikipedia.json';
+import { hw4Inputs } from './scenario-data/hw4/hw4Inputs.js';
 
 export type Scenario = {
   name: string,
@@ -97,8 +98,21 @@ export const wikipediaJs: Scenario = {
   inspectableValues: wikipediaObjDB.idToObj,
 };
 
+export const hw4: Scenario = {
+  name: "HW4",
+  inputs: hw4Inputs,
+  examples: [{
+    description: "how many people are there?",
+    code: "#person",
+  }, {
+    description: "how many people are there?",
+    code: "#person",
+  }],
+};
+
 export const scenarios: Scenario[] = [
   movies,
   simpleFamily,
   wikipediaJs,
+  hw4,
 ];
