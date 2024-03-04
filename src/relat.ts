@@ -105,3 +105,8 @@ export function o(op: UnaryOp | BinaryOp, leftOrOperand: Expression<{}>, right?:
     return { type: "binary", op: op as BinaryOp, left: leftOrOperand, right };
   }
 }
+
+export function addMeta<Meta>(expr: Expression<{}>, meta: Meta): Expression<Meta> {
+  // TODO: type checks don't work here??? ughhhhh
+  return { ...expr, ...meta };
+}

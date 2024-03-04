@@ -3,7 +3,6 @@ import inspect from 'object-inspect';
 import * as DL from './dl.js';
 import { entries, fromEntries } from './misc.js';
 import * as Relat from './relat.js';
-import { rangeString } from './relat.js';
 
 
 export function mkNextIndex() {
@@ -172,7 +171,7 @@ function atom(intExt: IntExt, intArgs: DLVarish[]): DL.Atom {
 export class TranslationError extends Error {
   constructor(public exp: Relat.Expression, public env: Environment, public cause: unknown) {
     const message = cause instanceof Error ? cause.message : inspect(cause);
-    super(`Error translating ${rangeString(exp.range)}: ${message}`, { cause });
+    super(`Error translating ${Relat.rangeString(exp.range)}: ${message}`, { cause });
     if (cause instanceof Error) { this.stack = cause.stack; }
   }
 }
@@ -181,7 +180,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
   const nextIndex = mkNextIndex();
 
   try {
-    // console.log('translate', rangeString(exp.range), env);
+    // console.log('translate', Relat.rangeString(exp.range), env);
 
     if (exp.type === 'identifier') {
       /**************
@@ -201,7 +200,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...intExt,
           program: [
             '',
-            comment(`${intExt.relName}: ${rangeString(exp.range)} (identifier)`),
+            comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (identifier)`),
             decl(intExt, env.scope),
             {
               type: 'rule',
@@ -222,7 +221,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
     } else if (exp.type === 'binary' && exp.op === '.') {
       // TODO: extremely hacked in support for x._ & _.x
       if (exp.left.type === 'identifier' && exp.left.name === '_') {
-        return translate({type: 'unary', op: '[_]', operand: exp.right, range: exp.range}, env);
+        return translate(Relat.addMeta(Relat.o('[_]', exp.right), { range: exp.range }), env);
       }
       if (exp.right.type === 'identifier' && exp.right.name === '_') {
         const operandResult = translate(exp.left, env);
@@ -240,7 +239,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           program: [
             ...operandResult.program,
             '',
-            comment(`${intExt.relName}: ${rangeString(exp.range)} (wildcard application)`),
+            comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (wildcard application)`),
             decl(intExt, env.scope),
             {
               type: 'rule',
@@ -283,7 +282,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (dot-join)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (dot-join)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -316,7 +315,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (cartesian product)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (cartesian product)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -375,7 +374,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...constraintResult.program,
           ...bodyResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (comprehension)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (comprehension)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -405,7 +404,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         program: [
           ...operandResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (some)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (some)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -433,7 +432,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         program: [
           ...operandResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (not)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (not)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -475,7 +474,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         program: [
           ...operandResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (transitive closure)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (transitive closure)`),
           decl(intExt, env.scope),
           // 1. new relation includes old relation
           {
@@ -518,7 +517,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         program: [
           ...operandResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (transpose)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (transpose)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -553,7 +552,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (union)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (union)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -595,7 +594,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (intersection)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (intersection)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -630,7 +629,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (intersection)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (intersection)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -669,7 +668,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (application)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (application)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -701,7 +700,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         program: [
           ...operandResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (wildcard application)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (wildcard application)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -735,7 +734,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (prefix join)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (prefix join)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -770,7 +769,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (suffix join)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (suffix join)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -828,7 +827,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         program: [
           ...operandResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (count)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (count)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -870,7 +869,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         program: [
           ...operandResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (count)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (count)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -922,7 +921,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (comparison)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (comparison)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -953,7 +952,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         ...intExt,
         program: [
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (literal)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (literal)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -979,7 +978,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         ...intExt,
         program: [
           '',
-          comment(`${intExt.relName}: ${rangeString(exp.range)} (formula)`),
+          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (formula)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
