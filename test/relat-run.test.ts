@@ -243,6 +243,18 @@ describe("runRelat", () => {
     ));
   });
 
+  it("concat", async () => {
+    const rel = inferTypes([[100, "a"], [100, "b"], [200, "b"]]);
+    expect(await runRelat("concat rel", { rel })).toEqual(inferTypes([["a,b,b"]]));
+  });
+
+  it("concat (scoped)", async () => {
+    const rel = inferTypes([[100, "a"], [100, "b"], [200, "b"]]);
+    expect(await runRelat("x : rel._ | concat rel[x]", { rel })).toEqual(inferTypes(
+      [[100, "a,b"], [200, "b"]]
+    ));
+  });
+
   it("basically works", async () => {
     // NOTE: One important thing this tests is nested comprehensions, which can
     // actually go wrong in interesting ways. Please keep that around.

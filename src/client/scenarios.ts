@@ -38,7 +38,10 @@ export const movies: Scenario = {
     code: normalizeIndent`
       let actors = isTitle.hasActor |
       a1: actors | a2: actors |
-      a2 > a1, #(hasActor.a1 & hasActor.a2) >= 3
+      a2 > a1,
+      let hasBothActors = hasActor.a1 & hasActor.a2 |
+      #hasBothActors >= 4,
+      #hasBothActors, concat hasBothActors
     `,
   }],
 };

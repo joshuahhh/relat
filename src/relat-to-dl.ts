@@ -1038,6 +1038,102 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           },
         ],
       };
+    } else if (exp.op === 'concat') {
+      // construct index_operand
+      // acc(A, 0) :- index_operand(_..., A, 0)
+      // acc(A + B, N + 1) :- acc(A, N), index_operand(_..., B, N + 1)
+      // top_index(N) :- N = max M : index_operand(_..., M)
+      // result(A) :- acc(A, N), top_index(N)
+
+      // TODO: process below is unconventional & messy
+
+      // we translate the operand directly just to check type
+      {
+        const operandResult = translate(exp.operand, env);
+        if (operandResult.intSlots.length === 0) {
+          throw new Error(`Cannot ${exp.op} relation with arity 0`);
+        }
+        if (operandResult.intSlots[operandResult.intSlots.length - 1].type !== 'symbol') {
+          throw new Error(`Cannot ${exp.op} relation with non-symbol last argument`);
+        }
+      }
+      // now we translate "index operand" for real
+      const indexOperandResult = translate(Relat.addMeta(Relat.o('index', exp.operand), { range: exp.range }), env);
+      const inputSlot = indexOperandResult.intSlots[indexOperandResult.intSlots.length - 2];
+      const aNamedSlot = nameSlot(inputSlot, nextIndex);
+      const bNamedSlot = nameSlot(inputSlot, nextIndex);
+      const aPlusBNamedSlot = nameSlot(inputSlot, nextIndex);
+      const nNamedSlot = nameSlot({debugName: 'index', type: 'number' }, nextIndex);
+      const mNamedSlot = nameSlot({debugName: 'index', type: 'number' }, nextIndex);
+      const nPlus1NamedSlot = nameSlot({debugName: 'indexPlus1', type: 'number' }, nextIndex);
+      const accIntExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: [ aNamedSlot, nNamedSlot ],
+        extSlots: indexOperandResult.extSlots,
+      };
+      const topIndexIntExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: [ nNamedSlot ],
+        extSlots: indexOperandResult.extSlots,
+      };
+      const resultIntExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: [ aNamedSlot ],
+        extSlots: indexOperandResult.extSlots,
+      };
+      return {
+        ...resultIntExt,
+        program: [
+          ...indexOperandResult.program,
+          '',
+          comment(`${resultIntExt.relName}: ${Relat.rangeString(exp.range)} (join)`),
+          decl(accIntExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(accIntExt, [ aNamedSlot, nNamedSlot ]),
+            body: [
+              atom(indexOperandResult, [ ...indexOperandResult.intSlots.slice(0, -2).map(() => unnamedDLVar), aNamedSlot, nNamedSlot ]),
+              `${nNamedSlot.name} = 0`,
+              ...constraintForExtSlots(accIntExt.extSlots, env.scope),
+            ],
+          },
+          {
+            type: 'rule',
+            head: atom(accIntExt, [ aPlusBNamedSlot, nPlus1NamedSlot ]),
+            body: [
+              atom(accIntExt, [ aNamedSlot, nNamedSlot ]),
+              atom(indexOperandResult, [ ...indexOperandResult.intSlots.slice(0, -2).map(() => unnamedDLVar), bNamedSlot, nPlus1NamedSlot ]),
+              `${nPlus1NamedSlot.name} = ${nNamedSlot.name} + 1`,
+              `${aPlusBNamedSlot.name} = ${aNamedSlot.name} + "," + ${bNamedSlot.name}`,
+              ...constraintForExtSlots(accIntExt.extSlots, env.scope),
+            ],
+          },
+          decl(topIndexIntExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(topIndexIntExt, [ nNamedSlot ]),
+            body: [
+              {
+                ...atom(indexOperandResult, [ ...indexOperandResult.intSlots.slice(0, -1).map(() => unnamedDLVar), mNamedSlot.name]),
+                aggregate: { type: 'max', input: mNamedSlot.name, output: nNamedSlot.name },
+              },
+              ...constraintForExtSlots(topIndexIntExt.extSlots, env.scope),
+            ],
+          },
+          decl(resultIntExt, env.scope),
+          {
+            type: 'rule',
+            head: atom(resultIntExt, [ aNamedSlot ]),
+            body: [
+              atom(accIntExt, [ aNamedSlot, nNamedSlot ]),
+              atom(topIndexIntExt, [ nNamedSlot ]),
+              ...constraintForExtSlots(resultIntExt.extSlots, env.scope),
+            ],
+          },
+        ],
+      }
+
+
     } else {
       // assertNever(exp);
       throw new Error(`Unexpected expression (${JSON.stringify(exp)})`);
