@@ -140,7 +140,18 @@ export function mkRelatVarUnsafe(name: string) {
 // }
 
 // Produce a decl for a fresh SRelation
-function decl({name, debugDesc, intSlots, extSlots}: SRelation, scope: Scope, choiceDomain?: DL.VariableName[][]): DL.Command {
+// (Choice domains are only supported among int slots; they will all include all ext slots)
+function decl({name, debugDesc, intSlots, extSlots}: SRelation, scope: Scope, choiceDomains?: IntSlot[][]): DL.Command {
+  const intSlotsInSig = intSlots.map(({ type, debugName }, i) => ({name: mkDLVarUnsafe(`i_${i}_${debugName}`), type}));
+  const extSlotsInSig = extSlots.map((name) => ({name: mkDLVarUnsafe(`e_${name}`), type: getScalarTypeFromScope(name, scope)}));
+  const choiceDomainsInDL = choiceDomains
+    ? choiceDomains.map((domain) => [
+        // get names of int slots as used in signature
+        ...domain.map((slot) => intSlotsInSig[intSlots.indexOf(slot)].name),
+        // and include the ext slots
+        ...extSlotsInSig.map((slot) => slot.name),
+      ])
+    : undefined;
   return [
     {
       type: 'comment',
@@ -150,10 +161,10 @@ function decl({name, debugDesc, intSlots, extSlots}: SRelation, scope: Scope, ch
       type: 'decl',
       relName: name,
       sig: [
-        ...intSlots.map(({ type, debugName }, i) => ({name: mkDLVarUnsafe(`i_${i}_${debugName}`), type})),
-        ...extSlots.map((name) => ({name: mkDLVarUnsafe(`e_${name}`), type: getScalarTypeFromScope(name, scope)})),
+        ...intSlotsInSig,
+        ...extSlotsInSig,
       ],
-      choiceDomains: choiceDomain,
+      choiceDomains: choiceDomainsInDL,
     },
   ];
 }
@@ -1009,25 +1020,12 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         intSlots: [ ...operandNamedSlots, nNamedSlot ],
         extSlots: operandR.extSlots,
       };
-      const sigExtSlots = resultR.extSlots.map((name) => ({name: mkDLVarUnsafe(`e_${name}`), type: getScalarTypeFromScope(name, env.scope)}));
       return {
         ...resultR,
         program: [
           ...operandR.program,
           '',
-          {
-            type: 'decl',
-            relName: resultR.name,
-            sig: [
-              ...operandNamedSlots,
-              nNamedSlot,
-              ...sigExtSlots,
-            ],
-            choiceDomains: [
-              [...operandNamedSlots.map(({name}) => name), ...sigExtSlots.map(({name}) => name)],
-              [nNamedSlot.name, ...sigExtSlots.map(({name}) => name)],
-            ],
-          },
+          decl(resultR, env.scope, [operandNamedSlots, [nNamedSlot]]),
           {
             type: 'rule',
             head: atom(resultR, [ ...operandNamedSlots, nNamedSlot ]),
