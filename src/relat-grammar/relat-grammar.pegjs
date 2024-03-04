@@ -81,8 +81,10 @@ E7
     { return { type: "let", variable, value, body, range: range() }; }
   / "(" _ exp:Expression _ ")"
     { return exp }
-  / "{" _ variable:Identifier _ ":" _ constraint:Expression _ "|" _ body:Expression _ "}"
-    { return { type: "comprehension", variable, constraint, body, range: range() }; }
+  / "{"
+      _ variableFirst:Identifier variableRest:( _ "," _ variable:Identifier { return variable; })*
+      _ ":" _ constraint:Expression _ "|" _ body:Expression _ "}"
+    { return { type: "comprehension", variables: [variableFirst, ...variableRest], constraint, body, range: range() }; }
   / number:($([1-9][0-9]*) / "0")
     { return { type: "constant", value: Number(number), range: range() }; }
   / "'" _ string:$([^']*) _ "'"

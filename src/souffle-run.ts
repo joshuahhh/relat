@@ -83,12 +83,15 @@ export async function runSouffle(
   try {
     module.callMain(['--no-preprocessor', 'myfile.dl']);
   } catch (e) {
-    console.error("Error calling main", e);
     throw e;
   }
   // console.log("calling main took", Date.now() - now);
 
   if (errorLines.length > 0) {
+    console.error("Souffle error:")
+    console.error(errorLines.map((line) => `  ${line}`).join('\n'));
+    console.error("Running code:");
+    console.error(code.split('\n').map((line, i) => `${String(i + 1).padStart(3)}: ${line}`).join('\n'));
     throw new Error(`Souffle error: ${errorLines.join('\n')}`);
   }
 

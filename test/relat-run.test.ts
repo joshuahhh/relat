@@ -61,10 +61,28 @@ describe("runRelat", () => {
     expect(output).toEqual({ types: ["number", "number"], tuples: [[100, 300], [200, 600], [300, 900]] });
   });
 
+  it("comprehension without reference to variable", async () => {
+    const rel: Relation = { types: ["number"], tuples: [[100], [200], [300]] };
+    const output = await runRelat("{x : rel | 1 > 0}", { rel });
+    expect(output).toEqual({ types: ["number"], tuples: [[100], [200], [300]] });
+  });
+
   it("comprehension with formula and let", async () => {
     const rel: Relation = { types: ["number"], tuples: [[100], [200], [300]] };
     const output = await runRelat("{x : rel | let y = `x * 3` | y > 450}", { rel });
     expect(output).toEqual({ types: ["number"], tuples: [[200], [300]] });
+  });
+
+  it("comprehension with multiple variables", async () => {
+    const rel: Relation = { types: ["number", "number"], tuples: [[1, 1], [1, 2], [2, 1], [2, 2]] };
+    const output = await runRelat("{x, y : rel | x > y}", { rel });
+    expect(output).toEqual({ types: ["number", "number"], tuples: [[2, 1]] });
+  });
+
+  it("comprehension with multiple variables but without reference to one", async () => {
+    const rel: Relation = { types: ["number", "number"], tuples: [[100, 1], [200, 2], [300, 3]] };
+    const output = await runRelat("{x, y : rel | x > 150}", { rel });
+    expect(output).toEqual({ types: ["number", "number"], tuples: [[200, 2], [300, 3]] });
   });
 
   it("some (positive)", async () => {

@@ -7,6 +7,7 @@ describe("parseRelat", () => {
   const x: Expression<{}> = { type: "identifier", name: "x" };
   const y: Expression<{}> = { type: "identifier", name: "y" };
   const z: Expression<{}> = { type: "identifier", name: "z" };
+  const w: Expression<{}> = { type: "identifier", name: "w" };
 
   const expectedParsings: [string, Expression<{}>][] = [
     // TODO: these used to be in correct precedence group but then we reordered
@@ -38,7 +39,8 @@ describe("parseRelat", () => {
     ["~x", o("~", x)],
     ["let x = y | z", { type: "let", variable: "x", value: y, body: z }],
     ["(x)", x],
-    ["{ x : y | z }", { type: "comprehension", variable: "x", constraint: y, body: z }],
+    ["{ x : y | z }", { type: "comprehension", variables: ["x"], constraint: y, body: z }],
+    ["{ x, y : z | w }", { type: "comprehension", variables: ["x", "y"], constraint: z, body: w }],
     ["100", { type: "constant", value: 100 }],
     ["'str'", { type: "constant", value: "str" }],
     ["\"str\"", { type: "constant", value: "str" }],

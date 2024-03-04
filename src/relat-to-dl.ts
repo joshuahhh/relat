@@ -1,7 +1,7 @@
 import _ from 'lodash';
 import inspect from 'object-inspect';
 import * as DL from './dl.js';
-import { entries } from './misc.js';
+import { entries, fromEntries } from './misc.js';
 import * as Relat from './relat.js';
 import { rangeString } from './relat.js';
 
@@ -161,7 +161,7 @@ function unDLVarish(v: DLVarish): DL.VariableName {
 function atom(intExt: IntExt, intArgs: DLVarish[]): DL.Atom {
   const {relName, intSlots, extSlots} = intExt;
   if (intArgs.length !== intSlots.length) {
-    throw new Error(`Arity mismatch: provided ${intArgs.length} args to relation with ${intSlots.length} intSlots`);
+    throw new Error(`Internal error: provided ${intArgs.length} args to relation with ${intSlots.length} intSlots`);
   }
   return {
     relName,
@@ -170,8 +170,10 @@ function atom(intExt: IntExt, intArgs: DLVarish[]): DL.Atom {
 }
 
 export class TranslationError extends Error {
-  constructor(public exp: Relat.Expression, public env: Environment, public cause: Error) {
-    super(`Error translating ${rangeString(exp.range)}: ${cause.message}`);
+  constructor(public exp: Relat.Expression, public env: Environment, public cause: unknown) {
+    const message = cause instanceof Error ? cause.message : inspect(cause);
+    super(`Error translating ${rangeString(exp.range)}: ${message}`, { cause });
+    if (cause instanceof Error) { this.stack = cause.stack; }
   }
 }
 
@@ -331,37 +333,41 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /*****************
        * COMPREHENSION *
        *****************/
-      const newRelatVar = mkRelatVarUnsafe(exp.variable);
-      const relatVarBinding = getFromScope(newRelatVar, env.scope);
-      if (relatVarBinding) {
-        throw new Error(`Variable ${exp.variable} already in scope`);
+      const newRelatVars = exp.variables.map(mkRelatVarUnsafe);
+      for (const newRelatVar of newRelatVars) {
+        if (getFromScope(newRelatVar, env.scope)) {
+          throw new Error(`Variable ${newRelatVar} already in scope`);
+        }
       }
       const constraintResult = translate(exp.constraint, env);
-      if (constraintResult.intSlots.length !== 1) {
-        throw new Error(`Constraint of comprehension must have arity 1`);
+      if (constraintResult.intSlots.length !== newRelatVars.length) {
+        throw new Error(`Comprehension has ${newRelatVars.length} variables but constraint has ${constraintResult.intSlots.length} arguments`);
       }
-      const newIntSlot: IntSlot = {
-        debugName: exp.variable,
-        type: constraintResult.intSlots[0].type
-      };
+      const newIntSlots: IntSlot[] = newRelatVars.map((newRelatVar, i) => ({
+        debugName: newRelatVar,
+        type: constraintResult.intSlots[i].type,
+      }));
       const envForBody: Environment = {
         ...env,
         scope: {
           ...env.scope,
-          [newRelatVar]: {
-            type: 'scalar',
-            scalarType: newIntSlot.type,
-            constraint: atom(constraintResult, [newRelatVar]),
-            constraintExtSlots: constraintResult.extSlots,
-          } satisfies RelatVariableBinding,  // TODO: why do I need this? this is scary
+          ...fromEntries(newRelatVars.map((newRelatVar, i) => [
+            newRelatVar,
+            {
+              type: 'scalar',
+              scalarType: newIntSlots[i].type,
+              constraint: atom(constraintResult, constraintResult.intSlots.map((_, j) => j === i ? newRelatVar : unnamedDLVar)),
+              constraintExtSlots: constraintResult.extSlots,
+            },
+          ] satisfies [RelatVariable, RelatVariableBinding])),  // TODO: why do I need this type check? scary
         },
       };
       const bodyResult = translate(exp.body, envForBody);
       const bodyNamedSlots = nameSlots(bodyResult.intSlots, nextIndex);
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
-        intSlots: [ newIntSlot, ...bodyNamedSlots ],
-        extSlots: _.difference(bodyResult.extSlots, [newRelatVar]),
+        intSlots: [ ...newIntSlots, ...bodyNamedSlots ],
+        extSlots: _.difference(bodyResult.extSlots, newRelatVars),
       };
       return {
         ...intExt,
@@ -373,8 +379,9 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           decl(intExt, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, [ newRelatVar, ...bodyNamedSlots ]),
+            head: atom(intExt, [ ...newRelatVars, ...bodyNamedSlots ]),
             body: [
+              atom(constraintResult, newRelatVars),
               atom(bodyResult, bodyNamedSlots),
               ...constraintForExtSlots(intExt.extSlots, env.scope),
             ],
@@ -993,8 +1000,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       // error is from subexpression; rethrow
       throw e;
     } else {
-      const message = e instanceof Error ? e.message : inspect(e);
-      throw new TranslationError(exp, env, new Error(message));
+      throw new TranslationError(exp, env, e);
     }
   }
 }
