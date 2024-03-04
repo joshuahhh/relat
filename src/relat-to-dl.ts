@@ -3,7 +3,6 @@ import inspect from 'object-inspect';
 import * as DL from './dl.js';
 import * as Relat from './relat.js';
 import { assertNever } from './misc.js';
-import { rule } from 'postcss';
 
 
 export function mkNextIndex() {
@@ -59,18 +58,6 @@ function getAllExtSlots(scope: Scope): RelatVariable[] {
 function mergeExtSlots(slots1: RelatVariable[], slots2: RelatVariable[]): RelatVariable[] {
   return _.uniq([...slots1, ...slots2]);
 }
-function constraintForExtSlots(extSlots: RelatVariable[], scope: Scope): DL.Literal[] {
-  return extSlots.flatMap((name) => {
-    const binding = scope.get(name);
-    if (!binding) {
-      throw new Error(`Variable ${name} not in scope`);
-    }
-    if (binding.type !== 'scalar') {
-      throw new Error(`Variable ${name} not in scope as scalar`);
-    }
-    return binding.constraint;
-  });
-}
 
 export type SRelation = {
   // SRelation (S for Scoped) describes a relation with internal arguments
@@ -107,8 +94,8 @@ function slotTypesSuffix(slots1: IntSlot[], slots2: IntSlot[]): boolean {
   return slotTypesMatch(slots1, slots2.slice(slots2.length - slots1.length));
 }
 
-// utility: common desire is to generate unique DL vars to go with an IntExt's
-// intSlots. here u go
+// utility: common desire is to generate unique DL vars to go with an
+// SRelation's intSlots. here u go
 type NamedIntSlot = IntSlot & { name: DL.VariableName };
 function nameSlots(intSlots: IntSlot[], nextIndex: () => number): NamedIntSlot[] {
   return intSlots.map((intSig) => nameSlot(intSig, nextIndex));
@@ -118,10 +105,9 @@ function nameSlot(intSlot: IntSlot, nextIndex: () => number): NamedIntSlot {
 }
 
 // Translating an expression (in an environment) results in both:
-// * an IntExt, which is a relation with internal & external arguments
+// * an SRelation, which is a relation with internal & external arguments
 // * a program which ensures that the relation reflects the desired expression
 export type TranslationResult = SRelation & { program: DL.Program }
-
 
 function mkDLVarUnsafe(name: string) {
   return name as DL.VariableName;
@@ -187,10 +173,21 @@ function atom(rel: SRelation, intArgs: DLVarish[]): DL.Atom {
 }
 
 function ruleScoped(rel: SRelation, headIntArgs: DLVarish[], body: DL.Literal[], scope: Scope): DL.Command {
+  const constraintsForExtSlots = rel.extSlots.flatMap((name) => {
+    const binding = scope.get(name);
+    if (!binding) {
+      throw new Error(`Variable ${name} not in scope`);
+    }
+    if (binding.type !== 'scalar') {
+      throw new Error(`Variable ${name} not in scope as scalar`);
+    }
+    return binding.constraint;
+  });
+
   return {
     type: 'rule',
     head: atom(rel, headIntArgs),
-    body: [...body, ...constraintForExtSlots(rel.extSlots, scope)],
+    body: [...body, ...constraintsForExtSlots],
   };
 }
 
@@ -755,19 +752,19 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         type: 'number',
         debugName: 'count',
       };
-      const intExt: SRelation = {
+      const resultR: SRelation = {
         name: `R${env.nextIndex()}`,
         debugDesc: `"${Relat.rangeString(exp.range)}" (count)`,
         intSlots: [ countNamedSlot ],
         extSlots: operandR.extSlots,
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
           operandR.program,
           '',
-          decl(intExt, env.scope),
-          ruleScoped(intExt, [ countNamedSlot ], [
+          decl(resultR, env.scope),
+          ruleScoped(resultR, [ countNamedSlot ], [
             aggregate({ type: 'count', output: countNamedSlot.name },
               atom(operandR, operandR.intSlots.map(() => wildcard))
             ),
@@ -791,19 +788,19 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         type: 'number',
         debugName: exp.op,
       };
-      const intExt: SRelation = {
+      const resultR: SRelation = {
         name: `R${env.nextIndex()}`,
         debugDesc: `"${Relat.rangeString(exp.range)}" (${exp.op})`,
         intSlots: [ outputNamedSlot ],
         extSlots: operandR.extSlots,
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
           operandR.program,
           '',
-          decl(intExt, env.scope),
-          ruleScoped(intExt, [ outputNamedSlot ], [
+          decl(resultR, env.scope),
+          ruleScoped(resultR, [ outputNamedSlot ], [
             aggregate({ type: exp.op, input: inputNamedSlot.name, output: outputNamedSlot.name },
               atom(operandR, operandR.intSlots.map((_, i) =>
                 i < operandR.intSlots.length - 1 ? wildcard : inputNamedSlot
@@ -827,7 +824,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       if (leftResult.intSlots[0].type !== rightResult.intSlots[0].type) {
         throw new Error(`Comparison must have matching types on both sides`);
       }
-      const intExt: SRelation = {
+      const resultR: SRelation = {
         name: `R${env.nextIndex()}`,
         debugDesc: `"${Relat.rangeString(exp.range)}" (${exp.op})`,
         intSlots: [ ],
@@ -836,13 +833,13 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const leftVar = mkDLVar('left', nextIndex);
       const rightVar = mkDLVar('right', nextIndex);
       return {
-        ...intExt,
+        ...resultR,
         program: [
           leftResult.program,
           rightResult.program,
           '',
-          decl(intExt, env.scope),
-          ruleScoped(intExt, [], [
+          decl(resultR, env.scope),
+          ruleScoped(resultR, [], [
             atom(leftResult, [ leftVar ]),
             atom(rightResult, [ rightVar ]),
              `(${leftVar} ${exp.op} ${rightVar})`,
@@ -857,18 +854,18 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         debugName: 'constant', type: typeof exp.value === 'string' ? 'symbol' : 'number' },
         nextIndex
       );
-      const intExt: SRelation = {
+      const resultR: SRelation = {
         name: `R${env.nextIndex()}`,
         debugDesc: `"${Relat.rangeString(exp.range)}" (constant)`,
         intSlots: [ namedSlot ],
         extSlots: [ ],
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
           '',
-          decl(intExt, env.scope),
-          ruleScoped(intExt, [ namedSlot ], [
+          decl(resultR, env.scope),
+          ruleScoped(resultR, [ namedSlot ], [
             `(${namedSlot.name} = ${typeof exp.value === 'string' ? `"${exp.value}"` : exp.value})`,
           ], env.scope),
         ],
@@ -879,18 +876,18 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        ***********/
       // TODO: guess we're assuming it's a number? hmmmmm
       const namedSlot = nameSlot({debugName: 'formula', type: 'number' }, nextIndex);
-      const intExt: SRelation = {
+      const resultR: SRelation = {
         name: `R${env.nextIndex()}`,
         debugDesc: `"${Relat.rangeString(exp.range)}" (formula)`,
         intSlots: [ namedSlot ],
         extSlots: getAllExtSlots(env.scope),  // TODO: guess we should parse & constrain this?
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
           '',
-          decl(intExt, env.scope),
-          ruleScoped(intExt, [ namedSlot ], [
+          decl(resultR, env.scope),
+          ruleScoped(resultR, [ namedSlot ], [
             `(${namedSlot.name} = ${exp.formula})`,
           ], env.scope),
         ],
@@ -1020,8 +1017,8 @@ export function translationResultToFullProgram(
   scope: ScopeRelationsOnly
 ): DL.Program {
   return [
-    ...[...scope].flatMap(([relName, { rel: intExt }]) => [
-      decl(intExt, new Map()),
+    ...[...scope].flatMap(([relName, { rel }]) => [
+      decl(rel, new Map()),
       { type: 'input', relName } satisfies DL.Command,
     ]),
     '',
