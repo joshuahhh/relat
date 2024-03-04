@@ -1,5 +1,6 @@
+import clsx from 'clsx';
 import _ from 'lodash';
-import { ReactNode, memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { ReactNode, memo, useEffect, useMemo, useState } from 'react';
 import { programToString } from '../dl.js';
 import { entries, fromEntries } from '../misc.js';
 import { SyntaxError } from '../relat-grammar/relat-grammar.js';
@@ -8,7 +9,6 @@ import { runRelat } from '../relat-run.js';
 import { Environment, IntExt, RelatVariable, RelatVariableBinding, mkNextIndex, mkRelatVarUnsafe, translate, translationResultToFullProgram } from '../relat-to-dl.js';
 import { stripMeta, toSexpr } from '../relat.js';
 import { Relation, inferTypes } from '../souffle-run.js';
-import clsx from 'clsx';
 import { Scenario, scenarios } from './scenarios.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/Tooltip.js';
 
@@ -71,10 +71,15 @@ export const Root = memo(() => {
     })();
   }, [code, scenario.inputs]);
 
-  const fixTextAreaHeight = useCallback((elem: HTMLTextAreaElement) => {
-    elem.style.minHeight = 'auto';
-    elem.style.minHeight = (elem.scrollHeight + 5) + 'px';
-  }, []);
+  const [ textArea, setTextArea ] = useState<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    void code;
+    if (textArea !== null) {
+      textArea.style.minHeight = 'auto';
+      textArea.style.minHeight = (textArea.scrollHeight + 5) + 'px';
+    }
+  }, [textArea, code]);
 
   return <div className='flex flex-col p-6 w-full h-full'>
     <div className="flex flex-row gap-10 h-1/3">
@@ -131,10 +136,9 @@ export const Root = memo(() => {
         <textarea className='p-4 font-mono bg-gray-800 whitespace-pre'
           spellCheck={false}
           value={code}
-          ref={fixTextAreaHeight}
+          ref={setTextArea}
           onChange={e => {
             setCode(e.target.value);
-            fixTextAreaHeight(e.target);
           }}
           onKeyDown={(e) => {
             const textarea = e.currentTarget;

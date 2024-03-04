@@ -20,10 +20,10 @@ export const movies: Scenario = {
   inputs: moviesInputs as any,
   examples: [{
     description: "how many movies of each genre?",
-    code: "{genre: hasGenre[_] | #hasGenre.genre}",
+    code: "genre: hasGenre[_] | #hasGenre.genre",
   }, {
     description: "which directors act in their movies?",
-    code: "{x: isTitle | x.hasActor & x.hasDirector}",
+    code: "x: isTitle | x.hasActor & x.hasDirector",
   }, {
     description: "how many actors?",
     code: "#hasActor[_]",
@@ -32,10 +32,10 @@ export const movies: Scenario = {
     code: "#'Vin Diesel'.^(~hasActor.hasActor)",
   }, {
     description: "shortest runtime by genre?",
-    code: "{genre: hasGenre[_] | min ~hasGenre[genre].hasRuntimeMin}",
-  // }, {
-  //   description: "which pairs act together a lot?",
-  //   code: "let actors = isTitle.hasActor | #{a1: actors | {a2: actors | a1, a2}}",
+    code: "genre: hasGenre[_] | min ~hasGenre[genre].hasRuntimeMin",
+  }, {
+    description: "which pairs act together a lot?",
+    code: "let actors = isTitle.hasActor | a1: actors | a2: actors - a1 | #(hasActor.a1 & hasActor.a2) >= 3",
   }],
 };
 
@@ -62,13 +62,13 @@ export const simpleFamily: Scenario = {
     code: "isPerson - isHappy",
   }, {
     description: "who has an unhappy child?",
-    code: "{x : isPerson | some (x.hasChild - isHappy)}",
+    code: "x : isPerson | some (x.hasChild - isHappy)",
   }, {
     description: "how many children does each person have?",
-    code: "{x : isPerson | #x.hasChild}",
+    code: "x : isPerson | #x.hasChild",
   }, {
     description: "how many children does each parent have?",
-    code: "{x : isPerson | let cnt = #x.hasChild | cnt > 0, cnt}",
+    code: "x : isPerson | let cnt = #x.hasChild | cnt > 0, cnt",
   }],
 };
 
@@ -107,10 +107,11 @@ export const hw4: Scenario = {
   }, {
     description: "2. women & men with most children",
     code: normalizeIndent`
-      let num_children = {x : person._ | #x.parent_child} |
-      let most_mothered = max female.num_children |
-      let most_fathered = max male.num_children |
-      num_children & (female, most_mothered ; male, most_fathered)
+      let num_children = {x : person._ | #parent_child[x]} |
+      let most_mothered = max num_children[female] |
+      let most_fathered = max num_children[male] |
+      { x, c: num_children & (female, most_mothered ; male, most_fathered) |
+        person[x] }
     `,
   }],
 };

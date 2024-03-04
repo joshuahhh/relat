@@ -46,11 +46,20 @@ E2b
     { return associateLeft("&", left, rights, range()); }
 
 E3
-  = left:E4 _ op:("=<" / ">=" / "=" / "<" / ">") _ right: E4
+  = left:E4 _ op:("<=" / ">=" / "=" / "<" / ">") _ right: E4
     { return { type: "binary", op, left, right, range: range() }; }
   / E4
 
 E4
+  = left: E4b rights:(
+        _ "+" _ right:E4b
+        { return (left) => ({ type: "binary", op: "+", left, right, range: range() }); }
+      / _ "-" _ right:E4b
+        { return (left) => ({ type: "binary", op: "-", left, right, range: range() }); }
+    )*
+    { return associateLeftWithFuncs(left, rights); }
+
+E4b
   = op:("some" / "not" / "#" / "min" / "max" / "sum" / "Σ") _ operand:E4
     { return { type: "unary", op: resolveSugar(op), operand, range: range() }; }
   / E5
@@ -81,9 +90,8 @@ E7
     { return { type: "let", variable, value, body, range: range() }; }
   / "(" _ exp:Expression _ ")"
     { return exp }
-  / "{"
-      _ variableFirst:Identifier variableRest:( _ "," _ variable:Identifier { return variable; })*
-      _ ":" _ constraint:Expression _ "|" _ body:Expression _ "}"
+  / variableFirst:Identifier variableRest:( _ "," _ variable:Identifier { return variable; })*
+      _ ":" _ constraint:Expression _ "|" _ body:Expression
     { return { type: "comprehension", variables: [variableFirst, ...variableRest], constraint, body, range: range() }; }
   / number:($([1-9][0-9]*) / "0")
     { return { type: "constant", value: Number(number), range: range() }; }

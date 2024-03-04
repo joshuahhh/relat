@@ -17,6 +17,16 @@ describe("runRelat", () => {
     expect(output).toEqual({ types: ["symbol"], tuples: [["str"]] });
   });
 
+  it("comparison of numbers", async () => {
+    expect(await runRelat("100 < 200", {})).toEqual(TRUE);
+    expect(await runRelat("100 < 100", {})).toEqual(FALSE);
+  });
+
+  it("comparison of strings", async () => {
+    expect(await runRelat("'a' < 'b'", {})).toEqual(TRUE);
+    expect(await runRelat("'a' < 'a'", {})).toEqual(FALSE);
+  });
+
   it("relation identifiers", async () => {
     const rel: Relation = { types: ["number"], tuples: [[100], [200]] };
     const output = await runRelat("rel", { rel });
@@ -51,37 +61,37 @@ describe("runRelat", () => {
 
   it("comprehension", async () => {
     const rel: Relation = { types: ["number"], tuples: [[100], [200], [300]] };
-    const output = await runRelat("{x : rel | x > 150}", { rel });
+    const output = await runRelat("x : rel | x > 150", { rel });
     expect(output).toEqual({ types: ["number"], tuples: [[200], [300]] });
   });
 
   it("comprehension with formula", async () => {
     const rel: Relation = { types: ["number"], tuples: [[100], [200], [300]] };
-    const output = await runRelat("{x : rel | `x * 3`}", { rel });
+    const output = await runRelat("x : rel | `x * 3`", { rel });
     expect(output).toEqual({ types: ["number", "number"], tuples: [[100, 300], [200, 600], [300, 900]] });
   });
 
   it("comprehension without reference to variable", async () => {
     const rel: Relation = { types: ["number"], tuples: [[100], [200], [300]] };
-    const output = await runRelat("{x : rel | 1 > 0}", { rel });
+    const output = await runRelat("x : rel | 1 > 0", { rel });
     expect(output).toEqual({ types: ["number"], tuples: [[100], [200], [300]] });
   });
 
   it("comprehension with formula and let", async () => {
     const rel: Relation = { types: ["number"], tuples: [[100], [200], [300]] };
-    const output = await runRelat("{x : rel | let y = `x * 3` | y > 450}", { rel });
+    const output = await runRelat("x : rel | let y = `x * 3` | y > 450", { rel });
     expect(output).toEqual({ types: ["number"], tuples: [[200], [300]] });
   });
 
   it("comprehension with multiple variables", async () => {
     const rel: Relation = { types: ["number", "number"], tuples: [[1, 1], [1, 2], [2, 1], [2, 2]] };
-    const output = await runRelat("{x, y : rel | x > y}", { rel });
+    const output = await runRelat("x, y : rel | x > y", { rel });
     expect(output).toEqual({ types: ["number", "number"], tuples: [[2, 1]] });
   });
 
   it("comprehension with multiple variables but without reference to one", async () => {
     const rel: Relation = { types: ["number", "number"], tuples: [[100, 1], [200, 2], [300, 3]] };
-    const output = await runRelat("{x, y : rel | x > 150}", { rel });
+    const output = await runRelat("x, y : rel | x > 150", { rel });
     expect(output).toEqual({ types: ["number", "number"], tuples: [[200, 2], [300, 3]] });
   });
 
@@ -219,31 +229,31 @@ describe("runRelat", () => {
     // actually go wrong in interesting ways. Please keep that around.
 
     const hasChildRoundAbout = await runRelat(
-      `{x : isPerson | some x.hasChild}`,
+      `x : isPerson | some x.hasChild`,
       simpleFamily.inputs
     );
     expect(hasChildRoundAbout).toEqual({ types: ["number"], tuples: [[10], [20]] });
 
     const hasSadChild = await runRelat(
-      `{x : isPerson | some {y : x.hasChild | not y.isHappy}}`,
+      `x : isPerson | some y : x.hasChild | not y.isHappy`,
       simpleFamily.inputs
     );
     expect(hasSadChild).toEqual({ types: ["number"], tuples: [[20]] });
 
     const hasChildButNoSadChildren = await runRelat(
-      `{x : isPerson | (some x.hasChild) & (not some {y : x.hasChild | not y.isHappy})}`,
+      `x : isPerson | (some x.hasChild) & (not some y : x.hasChild | not y.isHappy)`,
       simpleFamily.inputs
     );
     expect(hasChildButNoSadChildren).toEqual({ types: ["number"], tuples: [[10]] });
 
     const hasSadChild2 = await runRelat(
-      `{ x : isPerson | #x.hasChild > #(x.hasChild & isHappy) }`,
+      `x : isPerson | #x.hasChild > #(x.hasChild & isHappy)`,
       simpleFamily.inputs
     );
     expect(hasSadChild2).toEqual({ types: ["number"], tuples: [[20]] });
 
     const hasSadChild3 = await runRelat(
-      `{ x : isPerson | some (x.hasChild - isHappy)}`,
+      `x : isPerson | some (x.hasChild - isHappy)`,
       simpleFamily.inputs
     );
     expect(hasSadChild3).toEqual({ types: ["number"], tuples: [[20]] });

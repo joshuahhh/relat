@@ -886,20 +886,20 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           },
         ],
       };
-    } else if (exp.type === 'binary' && (exp.op === '=' || exp.op === '<' || exp.op === '>' || exp.op === '=<' || exp.op === '>=')) {
+    } else if (exp.type === 'binary' && (exp.op === '=' || exp.op === '<' || exp.op === '>' || exp.op === '<=' || exp.op === '>=')) {
       /***************
        * COMPARISONS *
        ***************/
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (leftResult.intSlots.length !== 1) {
-        throw new Error(`Left-hand side of scalar operator must have arity 1`);
+        throw new Error(`Left-hand side of comparison must have arity 1`);
       }
       if (rightResult.intSlots.length !== 1) {
-        throw new Error(`Right-hand side of scalar operator must have arity 1`);
+        throw new Error(`Right-hand side of comparison must have arity 1`);
       }
       if (leftResult.intSlots[0].type !== rightResult.intSlots[0].type) {
-        throw new Error(`Scalar operator must have matching types on both sides`);
+        throw new Error(`Comparison must have matching types on both sides`);
       }
       const intExt: IntExt = {
         relName: `R${env.nextIndex()}`,
@@ -908,13 +908,6 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       };
       const leftVar = mkDLVar('left', nextIndex);
       const rightVar = mkDLVar('right', nextIndex);
-      const souffleOperator = {
-        '=': '=',
-        '<': '<',
-        '>': '>',
-        '=<': '<=',
-        '>=': '>=',
-      }[exp.op];
       return {
         ...intExt,
         program: [
@@ -929,7 +922,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             body: [
               atom(leftResult, [ leftVar ]),
               atom(rightResult, [ rightVar ]),
-               `(${leftVar} ${souffleOperator} ${rightVar})`,
+               `(${leftVar} ${exp.op} ${rightVar})`,
                ...constraintForExtSlots(intExt.extSlots, env.scope),
             ]
           },
