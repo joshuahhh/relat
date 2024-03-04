@@ -224,6 +224,25 @@ describe("runRelat", () => {
     expect(output).toEqual({ types: ["number"], tuples: [[100], [200]] });
   });
 
+  it("index (simple)", async () => {
+    const rel = inferTypes([[100], [200]]);
+    expect(await runRelat("index rel", { rel })).toEqual(inferTypes([[100, 0], [200, 1]]));
+  });
+
+  it("index (higher arity)", async () => {
+    const rel = inferTypes([[100, "a"], [100, "b"], [200, "b"]]);
+    expect(await runRelat("index rel", { rel })).toEqual(inferTypes(
+      [[100, "a", 0], [100, "b", 1], [200, "b", 2]]
+    ));
+  });
+
+  it("index (scoped)", async () => {
+    const rel = inferTypes([[100, "a"], [100, "b"], [200, "b"]]);
+    expect(await runRelat("x : rel._ | index rel[x]", { rel })).toEqual(inferTypes(
+      [[100, "a", 0], [100, "b", 1], [200, "b", 0]]
+    ));
+  });
+
   it("basically works", async () => {
     // NOTE: One important thing this tests is nested comprehensions, which can
     // actually go wrong in interesting ways. Please keep that around.

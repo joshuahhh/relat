@@ -56,6 +56,7 @@ describe("parseRelat", () => {
     ["x[_]", o("[_]", x)],
     ["x <: y", o("<:", x, y)],
     ["x :> y", o(":>", x, y)],
+    ["index x", o("index", x)],
 
     // compounds
     ["some not x", o("some", o("not", x))],

@@ -109,12 +109,12 @@ function slotTypesSuffix(slots1: IntSlot[], slots2: IntSlot[]): boolean {
 
 // utility: common desire is to generate unique DL vars to go with an IntExt's
 // intSlots. here u go
-type NamedIntSlot = IntSlot & { dlVar: DL.VariableName };
+type NamedIntSlot = IntSlot & { name: DL.VariableName };
 function nameSlots(intSlots: IntSlot[], nextIndex: () => number): NamedIntSlot[] {
   return intSlots.map((intSig) => nameSlot(intSig, nextIndex));
 }
 function nameSlot(intSlot: IntSlot, nextIndex: () => number): NamedIntSlot {
-  return { ...intSlot, dlVar: mkDLVarUnsafe(`i_${nextIndex()}_${intSlot.debugName}`) };
+  return { ...intSlot, name: mkDLVarUnsafe(`i_${nextIndex()}_${intSlot.debugName}`) };
 }
 
 // Translating an expression (in an environment) results in both:
@@ -142,7 +142,7 @@ function comment(s: string): DL.Command {
 }
 
 // Produce a decl for a fresh IntExt
-function decl({relName, intSlots, extSlots}: IntExt, scope: Scope): DL.Command {
+function decl({relName, intSlots, extSlots}: IntExt, scope: Scope, choiceDomain?: DL.VariableName[][]): DL.Command {
   return {
     type: 'decl',
     relName,
@@ -150,12 +150,13 @@ function decl({relName, intSlots, extSlots}: IntExt, scope: Scope): DL.Command {
       ...intSlots.map(({ type, debugName }, i) => ({name: mkDLVarUnsafe(`i_${i}_${debugName}`), type})),
       ...extSlots.map((name) => ({name: mkDLVarUnsafe(`e_${name}`), type: getScalarTypeFromScope(name, scope)})),
     ],
+    choiceDomains: choiceDomain,
   };
 }
 
-type DLVarish = DL.VariableName | { dlVar: DL.VariableName };
+type DLVarish = DL.VariableName | { name: DL.VariableName };
 function unDLVarish(v: DLVarish): DL.VariableName {
-  return typeof v === 'string' ? v : v.dlVar;
+  return typeof v === 'string' ? v : v.name;
 }
 function atom(intExt: IntExt, intArgs: DLVarish[]): DL.Atom {
   const {relName, intSlots, extSlots} = intExt;
@@ -256,7 +257,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /************
        * DOT-JOIN *
        ************/
-      // result(A..., C...) = left(A..., B), right(B, C...)
+      // result(A..., C...) :- left(A..., B), right(B, C...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (leftResult.intSlots.length === 0) {
@@ -611,7 +612,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /**************
        * DIFFERENCE *
        **************/
-      // result(A...) = left(A...), !right(A...)
+      // result(A...) :- left(A...), !right(A...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (!slotTypesMatch(leftResult.intSlots, rightResult.intSlots)) {
@@ -649,7 +650,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /***************
        * APPLICATION *
        ***************/
-      // result(B...) = left(A..., B...), right(A...)
+      // result(B...) :- left(A..., B...), right(A...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (!slotTypesPrefix(rightResult.intSlots, leftResult.intSlots)) {
@@ -716,7 +717,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /***************
        * PREFIX JOIN *
        ***************/
-      // result(A..., B...) = left(A...), right(A..., B...)
+      // result(A..., B...) :- left(A...), right(A..., B...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (!slotTypesPrefix(leftResult.intSlots, rightResult.intSlots)) {
@@ -751,7 +752,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /***************
        * SUFFIX JOIN *
        ***************/
-      // result(A..., B...) = left(A..., B...), right(B...)
+      // result(A..., B...) :- left(A..., B...), right(B...)
       const leftResult = translate(exp.left, env);
       const rightResult = translate(exp.right, env);
       if (!slotTypesSuffix(rightResult.intSlots, leftResult.intSlots)) {
@@ -813,7 +814,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        *********/
       const operandResult = translate(exp.operand, env);
       const countNamedSlot: NamedIntSlot = {
-        dlVar: mkDLVar('count', nextIndex),
+        name: mkDLVar('count', nextIndex),
         type: 'number',
         debugName: 'count',
       };
@@ -835,7 +836,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             body: [
               {
                 ...atom(operandResult, operandResult.intSlots.map(() => unnamedDLVar)),
-                aggregate: { type: 'count', output: countNamedSlot.dlVar },
+                aggregate: { type: 'count', output: countNamedSlot.name },
               },
               ...constraintForExtSlots(intExt.extSlots, env.scope),
             ]
@@ -855,7 +856,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         throw new Error(`Cannot ${exp.op} relation with non-number last argument`);
       }
       const outputNamedSlot: NamedIntSlot = {
-        dlVar: mkDLVar(exp.op, nextIndex),
+        name: mkDLVar(exp.op, nextIndex),
         type: 'number',
         debugName: exp.op,
       };
@@ -879,7 +880,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
                 ...atom(operandResult, operandResult.intSlots.map((_, i) =>
                   i < operandResult.intSlots.length - 1 ? unnamedDLVar : inputNamedSlot
                 )),
-                aggregate: { type: exp.op, input: inputNamedSlot.dlVar, output: outputNamedSlot.dlVar },
+                aggregate: { type: exp.op, input: inputNamedSlot.name, output: outputNamedSlot.name },
               },
               ...constraintForExtSlots(intExt.extSlots, env.scope),
             ]
@@ -951,7 +952,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             type: 'rule',
             head: atom(intExt, [ namedSlot ]),
             body: [
-              `(${namedSlot.dlVar} = ${typeof exp.value === 'string' ? `"${exp.value}"` : exp.value})`,
+              `(${namedSlot.name} = ${typeof exp.value === 'string' ? `"${exp.value}"` : exp.value})`,
             ],
           },
         ],
@@ -977,8 +978,62 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             type: 'rule',
             head: atom(intExt, [ namedSlot ]),
             body: [
-              `(${namedSlot.dlVar} = ${exp.formula})`,
+              `(${namedSlot.name} = ${exp.formula})`,
               ...constraintForExtSlots(intExt.extSlots, env.scope),
+            ],
+          },
+        ],
+      };
+    } if (exp.type === 'unary' && exp.op === 'index') {
+      // .decl result(A, N) choice-domain A, N
+      // result(A, 0) :- operand(A)
+      // result(A, N + 1) :- result(_, N), operand(A)
+      const operandResult = translate(exp.operand, env);
+      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
+      const nNamedSlot = nameSlot({debugName: 'index', type: 'number' }, nextIndex);
+      const nPlus1NamedSlot = nameSlot({debugName: 'indexPlus1', type: 'number' }, nextIndex);
+      const resultIntExt: IntExt = {
+        relName: `R${env.nextIndex()}`,
+        intSlots: [ ...operandNamedSlots, nNamedSlot ],
+        extSlots: operandResult.extSlots,
+      };
+      const sigExtSlots = resultIntExt.extSlots.map((name) => ({name: mkDLVarUnsafe(`e_${name}`), type: getScalarTypeFromScope(name, env.scope)}));
+      return {
+        ...resultIntExt,
+        program: [
+          ...operandResult.program,
+          '',
+          comment(`${resultIntExt.relName}: ${Relat.rangeString(exp.range)} (index)`),
+          {
+            type: 'decl',
+            relName: resultIntExt.relName,
+            sig: [
+              ...operandNamedSlots,
+              nNamedSlot,
+              ...sigExtSlots,
+            ],
+            choiceDomains: [
+              [...operandNamedSlots.map(({name}) => name), ...sigExtSlots.map(({name}) => name)],
+              [nNamedSlot.name, ...sigExtSlots.map(({name}) => name)],
+            ],
+          },
+          {
+            type: 'rule',
+            head: atom(resultIntExt, [ ...operandNamedSlots, nNamedSlot ]),
+            body: [
+              atom(operandResult, operandNamedSlots),
+              `${nNamedSlot.name} = 0`,
+              ...constraintForExtSlots(resultIntExt.extSlots, env.scope),
+            ],
+          },
+          {
+            type: 'rule',
+            head: atom(resultIntExt, [ ...operandNamedSlots, nPlus1NamedSlot ]),
+            body: [
+              atom(resultIntExt, [ ...operandNamedSlots.map(() => unnamedDLVar), nNamedSlot ]),
+              atom(operandResult, operandNamedSlots),
+              `${nPlus1NamedSlot.name} = ${nNamedSlot.name} + 1`,
+              ...constraintForExtSlots(resultIntExt.extSlots, env.scope),
             ],
           },
         ],

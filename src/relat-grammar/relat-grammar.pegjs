@@ -60,7 +60,7 @@ E4
     { return associateLeftWithFuncs(left, rights); }
 
 E4b
-  = op:("some" / "not" / "#" / "min" / "max" / "sum" / "Σ") _ operand:E4
+  = op:("some" / "not" / "#" / "min" / "max" / "sum" / "Σ" / "index") _ operand:E4
     { return { type: "unary", op: resolveSugar(op), operand, range: range() }; }
   / E5
 

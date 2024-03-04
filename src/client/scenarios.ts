@@ -35,7 +35,11 @@ export const movies: Scenario = {
     code: "genre: hasGenre[_] | min ~hasGenre[genre].hasRuntimeMin",
   }, {
     description: "which pairs act together a lot?",
-    code: "let actors = isTitle.hasActor | a1: actors | a2: actors - a1 | #(hasActor.a1 & hasActor.a2) >= 3",
+    code: normalizeIndent`
+      let actors = isTitle.hasActor |
+      a1: actors | a2: actors |
+      a2 > a1, #(hasActor.a1 & hasActor.a2) >= 3
+    `,
   }],
 };
 

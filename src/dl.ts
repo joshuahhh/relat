@@ -51,6 +51,7 @@ export type Command =
       type: 'decl',
       relName: RelationName,
       sig: TypedVariable[],
+      choiceDomains?: VariableName[][],
     }
   | {
       type: 'input',
@@ -81,7 +82,11 @@ function commandToString(command: Command): string {
       return `${atomToString(command.head)} :- ${command.body.map(literalToString).join(', ')}.`;
     case 'decl':
       const args = command.sig.map(({name, type}) => `${name} : ${type}`).join(', ');
-      return `.decl ${command.relName}(${args})`;
+      let commandStr = `.decl ${command.relName}(${args})`;
+      if (command.choiceDomains) {
+        commandStr += ` choice-domain ${command.choiceDomains.map(domain => `(${domain.join(', ')})`).join(', ')}`;
+      }
+      return commandStr;
     case 'input':
       return `.input ${command.relName}`;
     case 'output':
