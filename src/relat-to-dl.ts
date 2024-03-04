@@ -2,6 +2,8 @@ import _ from 'lodash';
 import inspect from 'object-inspect';
 import * as DL from './dl.js';
 import * as Relat from './relat.js';
+import { assertNever } from './misc.js';
+import { rule } from 'postcss';
 
 
 export function mkNextIndex() {
@@ -129,7 +131,7 @@ function mkDLVar(debugName: string, nextIndex: () => number): DL.VariableName {
   return mkDLVarUnsafe(`v_${nextIndex()}_${debugName}`);
 }
 
-const unnamedDLVar: DL.VariableName = mkDLVarUnsafe('_');
+const wildcard: DL.VariableName = mkDLVarUnsafe('_');
 
 export function mkRelatVarUnsafe(name: string) {
   return name as RelatVariable;
@@ -184,6 +186,22 @@ function atom(rel: SRelation, intArgs: DLVarish[]): DL.Atom {
   };
 }
 
+function ruleScoped(rel: SRelation, headIntArgs: DLVarish[], body: DL.Literal[], scope: Scope): DL.Command {
+  return {
+    type: 'rule',
+    head: atom(rel, headIntArgs),
+    body: [...body, ...constraintForExtSlots(rel.extSlots, scope)],
+  };
+}
+
+function negated(atom: DL.Atom): DL.Literal {
+  return { ...atom, negated: true };
+}
+
+function aggregate(aggregate: DL.Aggregate, atom: DL.Atom): DL.Literal {
+  return { aggregate, ...atom };
+}
+
 export class TranslationError extends Error {
   constructor(public exp: Relat.Expression, public env: Environment, public cause: unknown) {
     const message = cause instanceof Error ? cause.message : inspect(cause);
@@ -218,12 +236,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           program: [
             '',
             decl(resultR, env.scope),
-            {
-              type: 'rule',
-              head: atom(resultR, [ relatVar ]),
-                // so the provided int var will overlap with an ext var
-              body: [ relatVarBinding.constraint ],
-            }
+            ruleScoped(resultR, [ relatVar ], [ ], env.scope),
           ],
         };
       } else if (relatVarBinding.type === 'relation') {
@@ -232,7 +245,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           program: [],
         }
       } else {
-        throw new Error(`Unknown identifier: ${exp.name}`);
+        assertNever(relatVarBinding);
       }
     } else if (exp.type === 'binary' && exp.op === '.') {
       // TODO: extremely hacked in support for x._ & _.x
@@ -254,17 +267,12 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         return {
           ...resultR,
           program: [
-            ...operandR.program,
+            operandR.program,
             '',
             decl(resultR, env.scope),
-            {
-              type: 'rule',
-              head: atom(resultR, operandNamedSlots.slice(0, -1)),
-              body: [
-                atom(operandR, [ ...operandNamedSlots.slice(0, -1), unnamedDLVar ]),
-                ...constraintForExtSlots(resultR.extSlots, env.scope),
-              ],
-            },
+            ruleScoped(resultR, operandNamedSlots.slice(0, -1), [
+              atom(operandR, [ ...operandNamedSlots.slice(0, -1), wildcard ])
+            ], env.scope),
           ],
         };
       }
@@ -296,19 +304,14 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...leftResult.program,
-          ...rightResult.program,
+          leftResult.program,
+          rightResult.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, joinNamedSlots),
-            body: [
-              atom(leftResult, leftNamedSlots),
-              atom(rightResult, [_.last(leftNamedSlots)!, ..._.tail(rightNamedSlots)]),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, joinNamedSlots, [
+            atom(leftResult, leftNamedSlots),
+            atom(rightResult, [_.last(leftNamedSlots)!, ..._.tail(rightNamedSlots)]),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'binary' && exp.op === ',') {
@@ -329,19 +332,14 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...leftResult.program,
-          ...rightResult.program,
+          leftResult.program,
+          rightResult.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, joinNamedSlots),
-            body: [
-              atom(leftResult, leftNamedSlots),
-              atom(rightResult, rightNamedSlots),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, joinNamedSlots, [
+            atom(leftResult, leftNamedSlots),
+            atom(rightResult, rightNamedSlots),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'comprehension') {
@@ -371,7 +369,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             {
               type: 'scalar',
               scalarType: newIntSlots[i].type,
-              constraint: atom(constraintResult, constraintResult.intSlots.map((_, j) => j === i ? newRelatVar : unnamedDLVar)),
+              constraint: atom(constraintResult, constraintResult.intSlots.map((_, j) => j === i ? newRelatVar : wildcard)),
               constraintExtSlots: constraintResult.extSlots,
             },
           ] as const),
@@ -392,15 +390,10 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...bodyResult.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, [ ...newRelatVars, ...bodyNamedSlots ]),
-            body: [
-              atom(constraintResult, newRelatVars),
-              atom(bodyResult, bodyNamedSlots),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, [ ...newRelatVars, ...bodyNamedSlots ], [
+            atom(constraintResult, newRelatVars),
+            atom(bodyResult, bodyNamedSlots),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'unary' && exp.op === 'some') {
@@ -419,17 +412,12 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...operandR.program,
+          operandR.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, []),
-            body: [
-              atom(operandR, operandNamedSlots.map(() => unnamedDLVar)),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ]
-          },
+          ruleScoped(resultR, [], [
+            atom(operandR, operandNamedSlots.map(() => wildcard)),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'unary' && exp.op === 'not') {
@@ -447,20 +435,12 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...operandR.program,
+          operandR.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, operandNamedSlots),
-            body: [
-              {
-                ...atom(operandR, operandNamedSlots.map(() => unnamedDLVar)),
-                negated: true,
-              },
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, operandNamedSlots, [
+            negated(atom(operandR, operandNamedSlots.map(() => wildcard))),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'unary' && (exp.op === '^' || exp.op === '*')) {
@@ -489,28 +469,18 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...operandR.program,
+          operandR.program,
           '',
           decl(resultR, env.scope),
           // 1. new relation includes old relation
-          {
-            type: 'rule',
-            head: atom(resultR, operandNamedSlots),
-            body: [
-              atom(operandR, operandNamedSlots),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, operandNamedSlots, [
+            atom(operandR, operandNamedSlots),
+          ], env.scope),
           // 2. new relation includes transitive closure of old relation
-          {
-            type: 'rule',
-            head: atom(resultR, operandNamedSlots),
-            body: [
-              atom(resultR, [ operandNamedSlots[0], middleVar ]),
-              atom(operandR, [ middleVar, operandNamedSlots[1] ]),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, operandNamedSlots, [
+            atom(resultR, [ operandNamedSlots[0], middleVar ]),
+            atom(resultR, [ middleVar, operandNamedSlots[1] ]),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'unary' && exp.op === '~') {
@@ -532,17 +502,12 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...operandR.program,
+          operandR.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, [ operandNamedSlots[1], operandNamedSlots[0] ]),
-            body: [
-              atom(operandR, operandNamedSlots),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, [ operandNamedSlots[1], operandNamedSlots[0] ], [
+            atom(operandR, operandNamedSlots),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'binary' && exp.op === ';') {
@@ -566,26 +531,16 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...leftResult.program,
-          ...rightResult.program,
+          leftResult.program,
+          rightResult.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, namedSlots),
-            body: [
-              atom(leftResult, namedSlots),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
-          {
-            type: 'rule',
-            head: atom(resultR, namedSlots),
-            body: [
-              atom(rightResult, namedSlots),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, namedSlots, [
+            atom(leftResult, namedSlots),
+          ], env.scope),
+          ruleScoped(resultR, namedSlots, [
+            atom(rightResult, namedSlots),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'binary' && exp.op === '&') {
@@ -608,19 +563,14 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...leftResult.program,
-          ...rightResult.program,
+          leftResult.program,
+          rightResult.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, namedSlots),
-            body: [
-              atom(leftResult, namedSlots),
-              atom(rightResult, namedSlots),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, namedSlots, [
+            atom(leftResult, namedSlots),
+            atom(rightResult, namedSlots),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'binary' && exp.op === '-') {
@@ -643,22 +593,14 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...leftResult.program,
-          ...rightResult.program,
+          leftResult.program,
+          rightResult.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, namedSlots),
-            body: [
-              atom(leftResult, namedSlots),
-              {
-                ...atom(rightResult, namedSlots),
-                negated: true,
-              },
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, namedSlots, [
+            atom(leftResult, namedSlots),
+            negated(atom(rightResult, namedSlots)),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'binary' && exp.op === '[]') {
@@ -682,19 +624,14 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...leftResult.program,
-          ...rightResult.program,
+          leftResult.program,
+          rightResult.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, resultNamedSlots),
-            body: [
-              atom(leftResult, leftNamedSlots),
-              atom(rightResult, leftNamedSlots.slice(0, rightResult.intSlots.length)),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, resultNamedSlots, [
+            atom(leftResult, leftNamedSlots),
+            atom(rightResult, leftNamedSlots.slice(0, rightResult.intSlots.length)),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'unary' && exp.op === '[_]') {
@@ -715,17 +652,12 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...operandR.program,
+          operandR.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, operandNamedSlots.slice(1)),
-            body: [
-              atom(operandR, [ unnamedDLVar, ...operandNamedSlots.slice(1) ]),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, operandNamedSlots.slice(1), [
+            atom(operandR, [ wildcard, ...operandNamedSlots.slice(1) ]),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'binary' && exp.op === '<:') {
@@ -748,19 +680,14 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...leftResult.program,
-          ...rightResult.program,
+          leftResult.program,
+          rightResult.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, rightNamedSlots),
-            body: [
-              atom(leftResult, rightNamedSlots.slice(0, leftResult.intSlots.length)),
-              atom(rightResult, rightNamedSlots),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, rightNamedSlots, [
+            atom(leftResult, rightNamedSlots.slice(0, leftResult.intSlots.length)),
+            atom(rightResult, rightNamedSlots),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'binary' && exp.op === ':>') {
@@ -783,19 +710,14 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...leftResult.program,
-          ...rightResult.program,
+          leftResult.program,
+          rightResult.program,
           '',
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, leftNamedSlots),
-            body: [
-              atom(leftResult, leftNamedSlots),
-              atom(rightResult, leftNamedSlots.slice(leftResult.intSlots.length - rightResult.intSlots.length)),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, leftNamedSlots, [
+            atom(leftResult, leftNamedSlots),
+            atom(rightResult, leftNamedSlots.slice(leftResult.intSlots.length - rightResult.intSlots.length)),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'let') {
@@ -819,8 +741,8 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...bodyResult,
         program: [
-          ...valueResult.program,
-          ...bodyResult.program,
+          valueResult.program,
+          bodyResult.program,
         ],
       };
     } else if (exp.type === 'unary' && exp.op === '#') {
@@ -842,20 +764,14 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...intExt,
         program: [
-          ...operandR.program,
+          operandR.program,
           '',
           decl(intExt, env.scope),
-          {
-            type: 'rule',
-            head: atom(intExt, [ countNamedSlot ]),
-            body: [
-              {
-                ...atom(operandR, operandR.intSlots.map(() => unnamedDLVar)),
-                aggregate: { type: 'count', output: countNamedSlot.name },
-              },
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
-            ]
-          },
+          ruleScoped(intExt, [ countNamedSlot ], [
+            aggregate({ type: 'count', output: countNamedSlot.name },
+              atom(operandR, operandR.intSlots.map(() => wildcard))
+            ),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'unary' && (exp.op === 'min' || exp.op === 'max' || exp.op === 'sum')) {
@@ -884,29 +800,16 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...intExt,
         program: [
-          ...operandR.program,
+          operandR.program,
           '',
           decl(intExt, env.scope),
-          {
-            type: 'rule',
-            head: atom(intExt, [ outputNamedSlot ]),
-            body: [
-              {
-                ...atom(operandR, operandR.intSlots.map((_, i) =>
-                  i < operandR.intSlots.length - 1 ? unnamedDLVar : inputNamedSlot
-                )),
-                aggregate: { type: exp.op, input: inputNamedSlot.name, output: outputNamedSlot.name },
-              },
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
-            ]
-          },
-          // rule(resultR(outputV), [
-          //   aggregate(
-          //     operandR(...operandR.wildcards().slice(0, -1), inputV),
-          //     exp.op, inputV, outputV,
-          //   )
-          //   ...constraintForExtSlots(intExt.extSlots, env.scope),
-          // ])
+          ruleScoped(intExt, [ outputNamedSlot ], [
+            aggregate({ type: exp.op, input: inputNamedSlot.name, output: outputNamedSlot.name },
+              atom(operandR, operandR.intSlots.map((_, i) =>
+                i < operandR.intSlots.length - 1 ? wildcard : inputNamedSlot
+              ))
+            ),
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'binary' && (exp.op === '=' || exp.op === '<' || exp.op === '>' || exp.op === '<=' || exp.op === '>=')) {
@@ -935,20 +838,15 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...intExt,
         program: [
-          ...leftResult.program,
-          ...rightResult.program,
+          leftResult.program,
+          rightResult.program,
           '',
           decl(intExt, env.scope),
-          {
-            type: 'rule',
-            head: atom(intExt, [ ]),
-            body: [
-              atom(leftResult, [ leftVar ]),
-              atom(rightResult, [ rightVar ]),
-               `(${leftVar} ${exp.op} ${rightVar})`,
-               ...constraintForExtSlots(intExt.extSlots, env.scope),
-            ]
-          },
+          ruleScoped(intExt, [], [
+            atom(leftResult, [ leftVar ]),
+            atom(rightResult, [ rightVar ]),
+             `(${leftVar} ${exp.op} ${rightVar})`,
+          ], env.scope),
         ],
       };
     } else if (exp.type === 'constant') {
@@ -970,13 +868,9 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         program: [
           '',
           decl(intExt, env.scope),
-          {
-            type: 'rule',
-            head: atom(intExt, [ namedSlot ]),
-            body: [
-              `(${namedSlot.name} = ${typeof exp.value === 'string' ? `"${exp.value}"` : exp.value})`,
-            ],
-          },
+          ruleScoped(intExt, [ namedSlot ], [
+            `(${namedSlot.name} = ${typeof exp.value === 'string' ? `"${exp.value}"` : exp.value})`,
+          ], env.scope),
         ],
       };
     } if (exp.type === 'formula') {
@@ -996,14 +890,9 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         program: [
           '',
           decl(intExt, env.scope),
-          {
-            type: 'rule',
-            head: atom(intExt, [ namedSlot ]),
-            body: [
-              `(${namedSlot.name} = ${exp.formula})`,
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(intExt, [ namedSlot ], [
+            `(${namedSlot.name} = ${exp.formula})`,
+          ], env.scope),
         ],
       };
     } if (exp.type === 'unary' && exp.op === 'index') {
@@ -1023,28 +912,18 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       return {
         ...resultR,
         program: [
-          ...operandR.program,
+          operandR.program,
           '',
           decl(resultR, env.scope, [operandNamedSlots, [nNamedSlot]]),
-          {
-            type: 'rule',
-            head: atom(resultR, [ ...operandNamedSlots, nNamedSlot ]),
-            body: [
-              atom(operandR, operandNamedSlots),
-              `${nNamedSlot.name} = 0`,
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
-          {
-            type: 'rule',
-            head: atom(resultR, [ ...operandNamedSlots, nPlus1NamedSlot ]),
-            body: [
-              atom(resultR, [ ...operandNamedSlots.map(() => unnamedDLVar), nNamedSlot ]),
-              atom(operandR, operandNamedSlots),
-              `${nPlus1NamedSlot.name} = ${nNamedSlot.name} + 1`,
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, [ ...operandNamedSlots, nNamedSlot ], [
+            atom(operandR, operandNamedSlots),
+            `${nNamedSlot.name} = 0`,
+          ], env.scope),
+          ruleScoped(resultR, [ ...operandNamedSlots, nPlus1NamedSlot ], [
+            atom(resultR, [ ...operandNamedSlots.map(() => wildcard), nNamedSlot ]),
+            atom(operandR, operandNamedSlots),
+            `${nPlus1NamedSlot.name} = ${nNamedSlot.name} + 1`,
+          ], env.scope),
         ],
       };
     } else if (exp.op === 'concat') {
@@ -1099,52 +978,29 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...indexOperandR.program,
           '',
           decl(accR, env.scope),
-          {
-            type: 'rule',
-            head: atom(accR, [ aNamedSlot, nNamedSlot ]),
-            body: [
-              atom(indexOperandR, [ ...indexOperandR.intSlots.slice(0, -2).map(() => unnamedDLVar), aNamedSlot, nNamedSlot ]),
-              `${nNamedSlot.name} = 0`,
-              ...constraintForExtSlots(accR.extSlots, env.scope),
-            ],
-          },
-          {
-            type: 'rule',
-            head: atom(accR, [ aPlusBNamedSlot, nPlus1NamedSlot ]),
-            body: [
-              atom(accR, [ aNamedSlot, nNamedSlot ]),
-              atom(indexOperandR, [ ...indexOperandR.intSlots.slice(0, -2).map(() => unnamedDLVar), bNamedSlot, nPlus1NamedSlot ]),
-              `${nPlus1NamedSlot.name} = ${nNamedSlot.name} + 1`,
-              `${aPlusBNamedSlot.name} = ${aNamedSlot.name} + "," + ${bNamedSlot.name}`,
-              ...constraintForExtSlots(accR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(accR, [ aNamedSlot, nNamedSlot ], [
+            atom(indexOperandR, [ ...indexOperandR.intSlots.slice(0, -2).map(() => wildcard), aNamedSlot, nNamedSlot ]),
+            `${nNamedSlot.name} = 0`,
+          ], env.scope),
+          ruleScoped(accR, [ aPlusBNamedSlot, nPlus1NamedSlot ], [
+            atom(accR, [ aNamedSlot, nNamedSlot ]),
+            atom(indexOperandR, [ ...indexOperandR.intSlots.slice(0, -2).map(() => wildcard), bNamedSlot, nPlus1NamedSlot ]),
+            `${nPlus1NamedSlot.name} = ${nNamedSlot.name} + 1`,
+            `${aPlusBNamedSlot.name} = ${aNamedSlot.name} + "," + ${bNamedSlot.name}`,
+          ], env.scope),
           decl(topIndexR, env.scope),
-          {
-            type: 'rule',
-            head: atom(topIndexR, [ nNamedSlot ]),
-            body: [
-              {
-                ...atom(indexOperandR, [ ...indexOperandR.intSlots.slice(0, -1).map(() => unnamedDLVar), mNamedSlot.name]),
-                aggregate: { type: 'max', input: mNamedSlot.name, output: nNamedSlot.name },
-              },
-              ...constraintForExtSlots(topIndexR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(topIndexR, [ nNamedSlot ], [
+            aggregate({ type: 'max', input: mNamedSlot.name, output: nNamedSlot.name },
+              atom(indexOperandR, [ ...indexOperandR.intSlots.slice(0, -1).map(() => wildcard), mNamedSlot.name]),
+            ),
+          ], env.scope),
           decl(resultR, env.scope),
-          {
-            type: 'rule',
-            head: atom(resultR, [ aNamedSlot ]),
-            body: [
-              atom(accR, [ aNamedSlot, nNamedSlot ]),
-              atom(topIndexR, [ nNamedSlot ]),
-              ...constraintForExtSlots(resultR.extSlots, env.scope),
-            ],
-          },
+          ruleScoped(resultR, [ aNamedSlot ], [
+            atom(accR, [ aNamedSlot, nNamedSlot ]),
+            atom(topIndexR, [ nNamedSlot ]),
+          ], env.scope),
         ],
       }
-
-
     } else {
       // assertNever(exp);
       throw new Error(`Unexpected expression (${JSON.stringify(exp)})`);

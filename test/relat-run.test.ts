@@ -27,7 +27,7 @@ describe("runRelat", () => {
     expect(await runRelat("'a' < 'a'", {})).toEqual(FALSE);
   });
 
-  it("relation identifiers", async () => {
+  it("relation identifier", async () => {
     const rel: Relation = { types: ["number"], tuples: [[100], [200]] };
     const output = await runRelat("rel", { rel });
     expect(output).toEqual(rel);
@@ -93,6 +93,31 @@ describe("runRelat", () => {
     const rel: Relation = { types: ["number", "number"], tuples: [[100, 1], [200, 2], [300, 3]] };
     const output = await runRelat("x, y : rel | x > 150", { rel });
     expect(output).toEqual({ types: ["number", "number"], tuples: [[200, 2], [300, 3]] });
+  });
+
+  it("nested comprehensions", async () => {
+    const rel = inferTypes([[100], [200]]);
+    expect(await runRelat("x : rel | y : rel | x", { rel })).toEqual(inferTypes(
+      [[100, 100, 100], [100, 200, 100], [200, 100, 200], [200, 200, 200]]
+    ));
+    expect(await runRelat("x : rel | y : rel | y", { rel })).toEqual(inferTypes(
+      [[100, 100, 100], [100, 200, 200], [200, 100, 100], [200, 200, 200]]
+    ));
+    expect(await runRelat("x : rel | y : rel | x < y", { rel })).toEqual(inferTypes([[100, 200]]));
+  });
+
+  it("transitive closure", async () => {
+    const rel = inferTypes([[1, 2], [2, 3], [3, 4], [10, 11]]);
+    expect(await runRelat("^rel", { rel })).toEqual(inferTypes(
+      [[1, 2], [1, 3], [1, 4], [2, 3], [2, 4], [3, 4], [10, 11]]
+    ));
+  });
+
+  it("transpose", async () => {
+    const rel = inferTypes([[1, 2], [2, 3], [3, 4], [10, 11]]);
+    expect(await runRelat("~rel", { rel })).toEqual(inferTypes(
+      [[2, 1], [3, 2], [4, 3], [11, 10]]
+    ));
   });
 
   it("some (positive)", async () => {
