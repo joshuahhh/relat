@@ -2,11 +2,11 @@ import clsx from 'clsx';
 import _ from 'lodash';
 import { ReactNode, memo, useEffect, useMemo, useState } from 'react';
 import { programToString } from '../dl.js';
-import { entries, fromEntries } from '../misc.js';
+import { entries } from '../misc.js';
 import { SyntaxError } from '../relat-grammar/relat-grammar.js';
 import { parseRelat } from '../relat-parse.js';
 import { runRelat } from '../relat-run.js';
-import { Environment, IntExt, RelatVariable, RelatVariableBinding, mkNextIndex, mkRelatVarUnsafe, translate, translationResultToFullProgram } from '../relat-to-dl.js';
+import { Environment, SRelation, ScopeRelationsOnly, mkNextIndex, mkRelatVarUnsafe, translate, translationResultToFullProgram } from '../relat-to-dl.js';
 import { stripMeta, toSexpr } from '../relat.js';
 import { Relation, inferTypes } from '../souffle-run.js';
 import { Scenario, scenarios } from './scenarios.js';
@@ -19,18 +19,19 @@ async function process(code: string, inputs: Record<string, Relation>) {
       .replaceAll(/<([A-Za-z_][A-Za-z0-9_]*)>/g, 'okv["$1"]');
     const ast = parseRelat(codeDesugared);
     const inputRelations = _.mapValues(inputs, inferTypes);
-    const scope: Record<RelatVariable, RelatVariableBinding & {type: 'relation'}> = fromEntries(
+    const scope: ScopeRelationsOnly = new Map(
       entries(inputRelations)
       .map(([relName, relation]) => {
-        const intExt: IntExt = {
-          relName: relName,
+        const rel: SRelation = {
+          name: relName,
+          debugDesc: 'input relation',
           intSlots: relation.types.map((type, i) => ({
             debugName: `${relName}${i}`,
             type,
           })),
           extSlots: [],
         }
-        return [mkRelatVarUnsafe(relName), {type: 'relation', intExt}];
+        return [mkRelatVarUnsafe(relName), {type: 'relation', rel}];
       })
     );
 

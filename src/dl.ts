@@ -1,3 +1,4 @@
+import objectInspect from 'object-inspect';
 import { assertNever } from './misc.js';
 import { type Type } from './souffle-types.js';
 
@@ -66,6 +67,7 @@ export type Command =
       comment: string,
     }
   | string
+  | Command[]
 
 export type Program = Command[]
 
@@ -76,6 +78,9 @@ export function programToString(program: Program): string {
 function commandToString(command: Command): string {
   if (typeof command === 'string') {
     return command;
+  }
+  if (Array.isArray(command)) {
+    return command.map(commandToString).join('\n');
   }
   switch (command.type) {
     case 'rule':
@@ -97,7 +102,7 @@ function commandToString(command: Command): string {
     default:
       const _exhaustiveCheck: never = command;
       void(_exhaustiveCheck);
-      throw new Error(`Unexpected command: ${command}`);
+      throw new Error(`Unexpected command: ${objectInspect(command)}`);
   }
 }
 

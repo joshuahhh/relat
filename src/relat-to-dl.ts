@@ -1,7 +1,6 @@
 import _ from 'lodash';
 import inspect from 'object-inspect';
 import * as DL from './dl.js';
-import { entries, fromEntries } from './misc.js';
 import * as Relat from './relat.js';
 
 
@@ -29,7 +28,7 @@ export type RelatVariableBinding =
       // variables are grounded. `constraintExtSlots` are external variables
       // referred to in the constraint; they come along for the ride as extra
       // references when you refer to this variable.
-  | { type: 'relation', intExt: IntExt }
+  | { type: 'relation', rel: SRelation }
       // these come from input relations and `let` bindings
 
 export type Environment = {
@@ -40,20 +39,18 @@ export type Environment = {
   scope: Scope,
 }
 
-type Scope = Record<RelatVariable, RelatVariableBinding>;
+export type Scope = Map<RelatVariable, RelatVariableBinding>;
+export type ScopeRelationsOnly = Map<RelatVariable, RelatVariableBinding & { type: 'relation' }>;
 
-function getFromScope(varName: RelatVariable, scope: Scope): RelatVariableBinding | undefined {
-  return scope[varName];
-}
 function getScalarTypeFromScope(varName: RelatVariable, scope: Scope): DL.Type {
-  const type = getFromScope(varName, scope);
+  const type = scope.get(varName);
   if (!type || type.type !== 'scalar') {
     throw new Error(`Variable ${varName} not in scope as scalar`);
   }
   return type.scalarType;
 }
 function getAllExtSlots(scope: Scope): RelatVariable[] {
-  return entries(scope)
+  return [...scope.entries()]
     .filter(([_, binding]) => binding.type === 'scalar')
     .map(([name, _]) => name);
 }
@@ -62,7 +59,7 @@ function mergeExtSlots(slots1: RelatVariable[], slots2: RelatVariable[]): RelatV
 }
 function constraintForExtSlots(extSlots: RelatVariable[], scope: Scope): DL.Literal[] {
   return extSlots.flatMap((name) => {
-    const binding = scope[name];
+    const binding = scope.get(name);
     if (!binding) {
       throw new Error(`Variable ${name} not in scope`);
     }
@@ -73,18 +70,19 @@ function constraintForExtSlots(extSlots: RelatVariable[], scope: Scope): DL.Lite
   });
 }
 
-export type IntExt = {
-  // IntExt describes a relation with internal arguments (those which are
-  // actually semantically arguments of the relation) and external arguments
-  // (which reflect dependencies on variables in scope).
-  relName: DL.RelationName,
+export type SRelation = {
+  // SRelation (S for Scoped) describes a relation with internal arguments
+  // (those which are actually semantically arguments of the relation) and
+  // external arguments (which reflect dependencies on variables in scope).
+  name: DL.RelationName,
+  debugDesc: string,
   intSlots: IntSlot[],
     // `debugName` is purely a hint for producing more legible output.
   extSlots: RelatVariable[],
-    // These variable names are significant, as they bind the IntExt to in-scope
-    // Relat variables. Types are not included, as they should be available from
-    // the context. Also: these names should all be distinct (per shadowing
-    // rules.)
+    // These variable names are significant, as they bind the SRelation to
+    // in-scope Relat variables. Types are not included, as they should be
+    // available from the context. Also: these names should all be distinct (per
+    // shadowing rules.)
 }
 
 type IntSlot = { type: DL.Type, debugName: string };
@@ -120,7 +118,7 @@ function nameSlot(intSlot: IntSlot, nextIndex: () => number): NamedIntSlot {
 // Translating an expression (in an environment) results in both:
 // * an IntExt, which is a relation with internal & external arguments
 // * a program which ensures that the relation reflects the desired expression
-export type TranslationResult = IntExt & { program: DL.Program }
+export type TranslationResult = SRelation & { program: DL.Program }
 
 
 function mkDLVarUnsafe(name: string) {
@@ -137,34 +135,40 @@ export function mkRelatVarUnsafe(name: string) {
   return name as RelatVariable;
 }
 
-function comment(s: string): DL.Command {
-  return { type: 'comment', comment: s };
-}
+// function comment(s: string): DL.Command {
+//   return { type: 'comment', comment: s };
+// }
 
-// Produce a decl for a fresh IntExt
-function decl({relName, intSlots, extSlots}: IntExt, scope: Scope, choiceDomain?: DL.VariableName[][]): DL.Command {
-  return {
-    type: 'decl',
-    relName,
-    sig: [
-      ...intSlots.map(({ type, debugName }, i) => ({name: mkDLVarUnsafe(`i_${i}_${debugName}`), type})),
-      ...extSlots.map((name) => ({name: mkDLVarUnsafe(`e_${name}`), type: getScalarTypeFromScope(name, scope)})),
-    ],
-    choiceDomains: choiceDomain,
-  };
+// Produce a decl for a fresh SRelation
+function decl({name, debugDesc, intSlots, extSlots}: SRelation, scope: Scope, choiceDomain?: DL.VariableName[][]): DL.Command {
+  return [
+    {
+      type: 'comment',
+      comment: `${name}: ${debugDesc}`,
+    },
+    {
+      type: 'decl',
+      relName: name,
+      sig: [
+        ...intSlots.map(({ type, debugName }, i) => ({name: mkDLVarUnsafe(`i_${i}_${debugName}`), type})),
+        ...extSlots.map((name) => ({name: mkDLVarUnsafe(`e_${name}`), type: getScalarTypeFromScope(name, scope)})),
+      ],
+      choiceDomains: choiceDomain,
+    },
+  ];
 }
 
 type DLVarish = DL.VariableName | { name: DL.VariableName };
 function unDLVarish(v: DLVarish): DL.VariableName {
   return typeof v === 'string' ? v : v.name;
 }
-function atom(intExt: IntExt, intArgs: DLVarish[]): DL.Atom {
-  const {relName, intSlots, extSlots} = intExt;
+function atom(rel: SRelation, intArgs: DLVarish[]): DL.Atom {
+  const {name, intSlots, extSlots} = rel;
   if (intArgs.length !== intSlots.length) {
     throw new Error(`Internal error: provided ${intArgs.length} args to relation with ${intSlots.length} intSlots`);
   }
   return {
-    relName,
+    relName: name,
     args: [...intArgs.map(unDLVarish), ...extSlots]
   };
 }
@@ -188,24 +192,24 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        * IDENTIFIER *
        **************/
       const relatVar = mkRelatVarUnsafe(exp.name);
-      const relatVarBinding = getFromScope(relatVar, env.scope);
+      const relatVarBinding = env.scope.get(relatVar);
       if (!relatVarBinding) {
         throw new Error(`Unknown identifier: ${exp.name}`);
       } else if (relatVarBinding.type === 'scalar') {
-        const intExt: IntExt = {
-          relName: `R${env.nextIndex()}`,
+        const resultR: SRelation = {
+          name: `R${env.nextIndex()}`,
+          debugDesc: `"${Relat.rangeString(exp.range)}" (identifier)`,
           intSlots: [ { type: relatVarBinding.scalarType, debugName: exp.name } ],
           extSlots: [ relatVar, ...relatVarBinding.constraintExtSlots ],
         }
         return {
-          ...intExt,
+          ...resultR,
           program: [
             '',
-            comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (identifier)`),
-            decl(intExt, env.scope),
+            decl(resultR, env.scope),
             {
               type: 'rule',
-              head: atom(intExt, [ relatVar ]),
+              head: atom(resultR, [ relatVar ]),
                 // so the provided int var will overlap with an ext var
               body: [ relatVarBinding.constraint ],
             }
@@ -213,7 +217,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         };
       } else if (relatVarBinding.type === 'relation') {
         return {
-          ...relatVarBinding.intExt,
+          ...relatVarBinding.rel,
           program: [],
         }
       } else {
@@ -225,29 +229,29 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         return translate(Relat.addMeta(Relat.o('[_]', exp.right), { range: exp.range }), env);
       }
       if (exp.right.type === 'identifier' && exp.right.name === '_') {
-        const operandResult = translate(exp.left, env);
-        if (operandResult.intSlots.length === 0) {
+        const operandR = translate(exp.left, env);
+        if (operandR.intSlots.length === 0) {
           throw new Error(`Cannot apply wildcard to relation with arity 0`);
         }
-        const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
-        const intExt: IntExt = {
-          relName: `R${env.nextIndex()}`,
+        const operandNamedSlots = nameSlots(operandR.intSlots, nextIndex);
+        const resultR: SRelation = {
+          name: `R${env.nextIndex()}`,
+          debugDesc: `"${Relat.rangeString(exp.range)}" (wildcard application)`,
           intSlots: operandNamedSlots.slice(0, -1),
-          extSlots: operandResult.extSlots,
+          extSlots: operandR.extSlots,
         };
         return {
-          ...intExt,
+          ...resultR,
           program: [
-            ...operandResult.program,
+            ...operandR.program,
             '',
-            comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (wildcard application)`),
-            decl(intExt, env.scope),
+            decl(resultR, env.scope),
             {
               type: 'rule',
-              head: atom(intExt, operandNamedSlots.slice(0, -1)),
+              head: atom(resultR, operandNamedSlots.slice(0, -1)),
               body: [
-                atom(operandResult, [ ...operandNamedSlots.slice(0, -1), unnamedDLVar ]),
-                ...constraintForExtSlots(intExt.extSlots, env.scope),
+                atom(operandR, [ ...operandNamedSlots.slice(0, -1), unnamedDLVar ]),
+                ...constraintForExtSlots(resultR.extSlots, env.scope),
               ],
             },
           ],
@@ -272,26 +276,26 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const leftNamedSlots = nameSlots(leftResult.intSlots, nextIndex);
       const rightNamedSlots = nameSlots(rightResult.intSlots, nextIndex);
       const joinNamedSlots = [..._.dropRight(leftNamedSlots, 1), ..._.drop(rightNamedSlots, 1)];
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (dot-join)`,
         intSlots: joinNamedSlots,
         extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (dot-join)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, joinNamedSlots),
+            head: atom(resultR, joinNamedSlots),
             body: [
               atom(leftResult, leftNamedSlots),
               atom(rightResult, [_.last(leftNamedSlots)!, ..._.tail(rightNamedSlots)]),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -305,26 +309,26 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const leftNamedSlots = nameSlots(leftResult.intSlots, nextIndex);
       const rightNamedSlots = nameSlots(rightResult.intSlots, nextIndex);
       const joinNamedSlots = [...leftNamedSlots, ...rightNamedSlots];
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (cartesian product)`,
         intSlots: joinNamedSlots,
         extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (cartesian product)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, joinNamedSlots),
+            head: atom(resultR, joinNamedSlots),
             body: [
               atom(leftResult, leftNamedSlots),
               atom(rightResult, rightNamedSlots),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -335,7 +339,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        *****************/
       const newRelatVars = exp.variables.map(mkRelatVarUnsafe);
       for (const newRelatVar of newRelatVars) {
-        if (getFromScope(newRelatVar, env.scope)) {
+        if (env.scope.has(newRelatVar)) {
           throw new Error(`Variable ${newRelatVar} already in scope`);
         }
       }
@@ -349,9 +353,9 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       }));
       const envForBody: Environment = {
         ...env,
-        scope: {
+        scope: new Map([
           ...env.scope,
-          ...fromEntries(newRelatVars.map((newRelatVar, i) => [
+          ...newRelatVars.map((newRelatVar, i) => [
             newRelatVar,
             {
               type: 'scalar',
@@ -359,31 +363,31 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
               constraint: atom(constraintResult, constraintResult.intSlots.map((_, j) => j === i ? newRelatVar : unnamedDLVar)),
               constraintExtSlots: constraintResult.extSlots,
             },
-          ] satisfies [RelatVariable, RelatVariableBinding])),  // TODO: why do I need this type check? scary
-        },
+          ] as const),
+        ]),
       };
       const bodyResult = translate(exp.body, envForBody);
       const bodyNamedSlots = nameSlots(bodyResult.intSlots, nextIndex);
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (comprehension)`,
         intSlots: [ ...newIntSlots, ...bodyNamedSlots ],
         extSlots: _.difference(bodyResult.extSlots, newRelatVars),
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
           ...constraintResult.program,
           ...bodyResult.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (comprehension)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, [ ...newRelatVars, ...bodyNamedSlots ]),
+            head: atom(resultR, [ ...newRelatVars, ...bodyNamedSlots ]),
             body: [
               atom(constraintResult, newRelatVars),
               atom(bodyResult, bodyNamedSlots),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -392,27 +396,27 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /********
        * SOME *
        ********/
-      const operandResult = translate(exp.operand, env);
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const operandR = translate(exp.operand, env);
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (some)`,
         intSlots: [],
-        extSlots: operandResult.extSlots,
+        extSlots: operandR.extSlots,
       };
 
-      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
+      const operandNamedSlots = nameSlots(operandR.intSlots, nextIndex);
       return {
-        ...intExt,
+        ...resultR,
         program: [
-          ...operandResult.program,
+          ...operandR.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (some)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, []),
+            head: atom(resultR, []),
             body: [
-              atom(operandResult, operandNamedSlots.map(() => unnamedDLVar)),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              atom(operandR, operandNamedSlots.map(() => unnamedDLVar)),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ]
           },
         ],
@@ -421,29 +425,29 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /*******
        * NOT *
        *******/
-      const operandResult = translate(exp.operand, env);
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const operandR = translate(exp.operand, env);
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (not)`,
         intSlots: [],
-        extSlots: operandResult.extSlots,
+        extSlots: operandR.extSlots,
       };
-      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
+      const operandNamedSlots = nameSlots(operandR.intSlots, nextIndex);
       return {
-        ...intExt,
+        ...resultR,
         program: [
-          ...operandResult.program,
+          ...operandR.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (not)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, operandNamedSlots),
+            head: atom(resultR, operandNamedSlots),
             body: [
               {
-                ...atom(operandResult, operandNamedSlots.map(() => unnamedDLVar)),
+                ...atom(operandR, operandNamedSlots.map(() => unnamedDLVar)),
                 negated: true,
               },
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -456,44 +460,44 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         // TODO: I don't actually know how to handle this; what's the universe?
         throw new Error(`Reflexive transitive closure (*) not yet implemented`);
       }
-      const operandResult = translate(exp.operand, env);
-      if (operandResult.intSlots.length !== 2) {
+      const operandR = translate(exp.operand, env);
+      if (operandR.intSlots.length !== 2) {
         throw new Error(`Transitive closure must have arity 2`);
       }
-      if (operandResult.intSlots[0].type !== operandResult.intSlots[1].type) {
+      if (operandR.intSlots[0].type !== operandR.intSlots[1].type) {
         throw new Error(`Transitive closure must have same type for both arguments`);
       }
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
-        intSlots: operandResult.intSlots,
-        extSlots: operandResult.extSlots,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (transitive closure)`,
+        intSlots: operandR.intSlots,
+        extSlots: operandR.extSlots,
       };
-      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
+      const operandNamedSlots = nameSlots(operandR.intSlots, nextIndex);
       const middleVar = mkDLVar('middle', nextIndex);
       return {
-        ...intExt,
+        ...resultR,
         program: [
-          ...operandResult.program,
+          ...operandR.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (transitive closure)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           // 1. new relation includes old relation
           {
             type: 'rule',
-            head: atom(intExt, operandNamedSlots),
+            head: atom(resultR, operandNamedSlots),
             body: [
-              atom(operandResult, operandNamedSlots),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              atom(operandR, operandNamedSlots),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
           // 2. new relation includes transitive closure of old relation
           {
             type: 'rule',
-            head: atom(intExt, operandNamedSlots),
+            head: atom(resultR, operandNamedSlots),
             body: [
-              atom(intExt, [ operandNamedSlots[0], middleVar ]),
-              atom(operandResult, [ middleVar, operandNamedSlots[1] ]),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              atom(resultR, [ operandNamedSlots[0], middleVar ]),
+              atom(operandR, [ middleVar, operandNamedSlots[1] ]),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -503,29 +507,29 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        * TRANSPOSE *
        *************/
       // result(B, A) :- operand(A, B)
-      const operandResult = translate(exp.operand, env);
-      if (operandResult.intSlots.length !== 2) {
+      const operandR = translate(exp.operand, env);
+      if (operandR.intSlots.length !== 2) {
         throw new Error(`Transpose must have arity 2`);
       }
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
-        intSlots: [ operandResult.intSlots[1], operandResult.intSlots[0] ],
-        extSlots: operandResult.extSlots,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (transpose)`,
+        intSlots: [ operandR.intSlots[1], operandR.intSlots[0] ],
+        extSlots: operandR.extSlots,
       };
-      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
+      const operandNamedSlots = nameSlots(operandR.intSlots, nextIndex);
       return {
-        ...intExt,
+        ...resultR,
         program: [
-          ...operandResult.program,
+          ...operandR.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (transpose)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, [ operandNamedSlots[1], operandNamedSlots[0] ]),
+            head: atom(resultR, [ operandNamedSlots[1], operandNamedSlots[0] ]),
             body: [
-              atom(operandResult, operandNamedSlots),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              atom(operandR, operandNamedSlots),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -541,34 +545,34 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       if (!slotTypesMatch(leftResult.intSlots, rightResult.intSlots)) {
         throw new Error(`Relations in union must have matching signatures, but got ${inspect(leftResult.intSlots)} and ${inspect(rightResult.intSlots)}`);
       }
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (union)`,
         intSlots: leftResult.intSlots,  // TODO: debugName from left? meh why not
         extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
-      const namedSlots = nameSlots(intExt.intSlots, nextIndex);
+      const namedSlots = nameSlots(resultR.intSlots, nextIndex);
       return {
-        ...intExt,
+        ...resultR,
         program: [
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (union)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, namedSlots),
+            head: atom(resultR, namedSlots),
             body: [
               atom(leftResult, namedSlots),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
           {
             type: 'rule',
-            head: atom(intExt, namedSlots),
+            head: atom(resultR, namedSlots),
             body: [
               atom(rightResult, namedSlots),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -583,27 +587,27 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       if (!slotTypesMatch(leftResult.intSlots, rightResult.intSlots)) {
         throw new Error(`Relations in intersection must have matching signatures, but got ${inspect(leftResult.intSlots)} and ${inspect(rightResult.intSlots)}`);
       }
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (intersection)`,
         intSlots: leftResult.intSlots,  // TODO: debugName from left? meh why not
         extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
-      const namedSlots = nameSlots(intExt.intSlots, nextIndex);
+      const namedSlots = nameSlots(resultR.intSlots, nextIndex);
       return {
-        ...intExt,
+        ...resultR,
         program: [
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (intersection)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, namedSlots),
+            head: atom(resultR, namedSlots),
             body: [
               atom(leftResult, namedSlots),
               atom(rightResult, namedSlots),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -618,30 +622,30 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       if (!slotTypesMatch(leftResult.intSlots, rightResult.intSlots)) {
         throw new Error(`Relations in difference must have matching signatures, but got ${inspect(leftResult.intSlots)} and ${inspect(rightResult.intSlots)}`);
       }
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (difference)`,
         intSlots: leftResult.intSlots,  // TODO: debugName from left? meh why not
         extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
-      const namedSlots = nameSlots(intExt.intSlots, nextIndex);
+      const namedSlots = nameSlots(resultR.intSlots, nextIndex);
       return {
-        ...intExt,
+        ...resultR,
         program: [
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (intersection)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, namedSlots),
+            head: atom(resultR, namedSlots),
             body: [
               atom(leftResult, namedSlots),
               {
                 ...atom(rightResult, namedSlots),
                 negated: true,
               },
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -658,26 +662,26 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       }
       const leftNamedSlots = nameSlots(leftResult.intSlots, nextIndex);
       const resultNamedSlots = leftNamedSlots.slice(rightResult.intSlots.length);
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (application)`,
         intSlots: resultNamedSlots,
         extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (application)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, resultNamedSlots),
+            head: atom(resultR, resultNamedSlots),
             body: [
               atom(leftResult, leftNamedSlots),
               atom(rightResult, leftNamedSlots.slice(0, rightResult.intSlots.length)),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -686,29 +690,29 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /************************
        * WILDCARD APPLICATION * (hacky stopgap)
        ************************/
-      const operandResult = translate(exp.operand, env);
-      if (operandResult.intSlots.length === 0) {
+      const operandR = translate(exp.operand, env);
+      if (operandR.intSlots.length === 0) {
         throw new Error(`Cannot apply wildcard to relation with arity 0`);
       }
-      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const operandNamedSlots = nameSlots(operandR.intSlots, nextIndex);
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (wildcard application)`,
         intSlots: operandNamedSlots.slice(1),
-        extSlots: operandResult.extSlots,
+        extSlots: operandR.extSlots,
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
-          ...operandResult.program,
+          ...operandR.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (wildcard application)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, operandNamedSlots.slice(1)),
+            head: atom(resultR, operandNamedSlots.slice(1)),
             body: [
-              atom(operandResult, [ unnamedDLVar, ...operandNamedSlots.slice(1) ]),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              atom(operandR, [ unnamedDLVar, ...operandNamedSlots.slice(1) ]),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -724,26 +728,26 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         throw new Error(`Cannot join relation with signature ${inspect(leftResult.intSlots)} as prefix of relation with signature ${inspect(rightResult.intSlots)}`);
       }
       const rightNamedSlots = nameSlots(rightResult.intSlots, nextIndex);
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (prefix join)`,
         intSlots: rightNamedSlots,
         extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (prefix join)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, rightNamedSlots),
+            head: atom(resultR, rightNamedSlots),
             body: [
               atom(leftResult, rightNamedSlots.slice(0, leftResult.intSlots.length)),
               atom(rightResult, rightNamedSlots),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -759,26 +763,26 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         throw new Error(`Cannot join relation with signature ${inspect(rightResult.intSlots)} as suffix of relation with signature ${inspect(leftResult.intSlots)}`);
       }
       const leftNamedSlots = nameSlots(leftResult.intSlots, nextIndex);
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (suffix join)`,
         intSlots: leftNamedSlots,
         extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
       return {
-        ...intExt,
+        ...resultR,
         program: [
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (suffix join)`),
-          decl(intExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(intExt, leftNamedSlots),
+            head: atom(resultR, leftNamedSlots),
             body: [
               atom(leftResult, leftNamedSlots),
               atom(rightResult, leftNamedSlots.slice(leftResult.intSlots.length - rightResult.intSlots.length)),
-              ...constraintForExtSlots(intExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -788,17 +792,17 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        * LET *
        *******/
       const newRelatVar: RelatVariable = mkRelatVarUnsafe(exp.variable);
-      const relatVarBinding = getFromScope(newRelatVar, env.scope);
+      const relatVarBinding = env.scope.get(newRelatVar);
       if (relatVarBinding) {
         throw new Error(`Variable ${exp.variable} already in scope`);
       }
       const valueResult = translate(exp.value, env);
       const envForBody: Environment = {
         ...env,
-        scope: {
+        scope: new Map([
           ...env.scope,
-          [exp.variable]: { type: 'relation', name: newRelatVar, intExt: valueResult },
-        },
+          [newRelatVar, { type: 'relation', rel: valueResult }],
+        ]),
       };
       const bodyResult = translate(exp.body, envForBody);
       return {
@@ -812,30 +816,30 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /*********
        * COUNT *
        *********/
-      const operandResult = translate(exp.operand, env);
+      const operandR = translate(exp.operand, env);
       const countNamedSlot: NamedIntSlot = {
         name: mkDLVar('count', nextIndex),
         type: 'number',
         debugName: 'count',
       };
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const intExt: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (count)`,
         intSlots: [ countNamedSlot ],
-        extSlots: operandResult.extSlots,
+        extSlots: operandR.extSlots,
       };
       return {
         ...intExt,
         program: [
-          ...operandResult.program,
+          ...operandR.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (count)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
             head: atom(intExt, [ countNamedSlot ]),
             body: [
               {
-                ...atom(operandResult, operandResult.intSlots.map(() => unnamedDLVar)),
+                ...atom(operandR, operandR.intSlots.map(() => unnamedDLVar)),
                 aggregate: { type: 'count', output: countNamedSlot.name },
               },
               ...constraintForExtSlots(intExt.extSlots, env.scope),
@@ -847,11 +851,11 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       /***************
        * MIN/MAX/SUM *
        ***************/
-      const operandResult = translate(exp.operand, env);
-      if (operandResult.intSlots.length === 0) {
+      const operandR = translate(exp.operand, env);
+      if (operandR.intSlots.length === 0) {
         throw new Error(`Cannot ${exp.op} relation with arity 0`);
       }
-      const inputNamedSlot: NamedIntSlot = nameSlot(operandResult.intSlots[operandResult.intSlots.length - 1], nextIndex)
+      const inputNamedSlot: NamedIntSlot = nameSlot(operandR.intSlots[operandR.intSlots.length - 1], nextIndex)
       if (inputNamedSlot.type !== 'number') {
         throw new Error(`Cannot ${exp.op} relation with non-number last argument`);
       }
@@ -860,31 +864,38 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         type: 'number',
         debugName: exp.op,
       };
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const intExt: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (${exp.op})`,
         intSlots: [ outputNamedSlot ],
-        extSlots: operandResult.extSlots,
+        extSlots: operandR.extSlots,
       };
       return {
         ...intExt,
         program: [
-          ...operandResult.program,
+          ...operandR.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (count)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
             head: atom(intExt, [ outputNamedSlot ]),
             body: [
               {
-                ...atom(operandResult, operandResult.intSlots.map((_, i) =>
-                  i < operandResult.intSlots.length - 1 ? unnamedDLVar : inputNamedSlot
+                ...atom(operandR, operandR.intSlots.map((_, i) =>
+                  i < operandR.intSlots.length - 1 ? unnamedDLVar : inputNamedSlot
                 )),
                 aggregate: { type: exp.op, input: inputNamedSlot.name, output: outputNamedSlot.name },
               },
               ...constraintForExtSlots(intExt.extSlots, env.scope),
             ]
           },
+          // rule(resultR(outputV), [
+          //   aggregate(
+          //     operandR(...operandR.wildcards().slice(0, -1), inputV),
+          //     exp.op, inputV, outputV,
+          //   )
+          //   ...constraintForExtSlots(intExt.extSlots, env.scope),
+          // ])
         ],
       };
     } else if (exp.type === 'binary' && (exp.op === '=' || exp.op === '<' || exp.op === '>' || exp.op === '<=' || exp.op === '>=')) {
@@ -902,8 +913,9 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       if (leftResult.intSlots[0].type !== rightResult.intSlots[0].type) {
         throw new Error(`Comparison must have matching types on both sides`);
       }
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const intExt: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (${exp.op})`,
         intSlots: [ ],
         extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
       };
@@ -915,7 +927,6 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...leftResult.program,
           ...rightResult.program,
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (comparison)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -937,8 +948,9 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         debugName: 'constant', type: typeof exp.value === 'string' ? 'symbol' : 'number' },
         nextIndex
       );
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const intExt: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (constant)`,
         intSlots: [ namedSlot ],
         extSlots: [ ],
       };
@@ -946,7 +958,6 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         ...intExt,
         program: [
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (literal)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -963,8 +974,9 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
        ***********/
       // TODO: guess we're assuming it's a number? hmmmmm
       const namedSlot = nameSlot({debugName: 'formula', type: 'number' }, nextIndex);
-      const intExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const intExt: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (formula)`,
         intSlots: [ namedSlot ],
         extSlots: getAllExtSlots(env.scope),  // TODO: guess we should parse & constrain this?
       };
@@ -972,7 +984,6 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
         ...intExt,
         program: [
           '',
-          comment(`${intExt.relName}: ${Relat.rangeString(exp.range)} (formula)`),
           decl(intExt, env.scope),
           {
             type: 'rule',
@@ -988,25 +999,25 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       // .decl result(A, N) choice-domain A, N
       // result(A, 0) :- operand(A)
       // result(A, N + 1) :- result(_, N), operand(A)
-      const operandResult = translate(exp.operand, env);
-      const operandNamedSlots = nameSlots(operandResult.intSlots, nextIndex);
+      const operandR = translate(exp.operand, env);
+      const operandNamedSlots = nameSlots(operandR.intSlots, nextIndex);
       const nNamedSlot = nameSlot({debugName: 'index', type: 'number' }, nextIndex);
       const nPlus1NamedSlot = nameSlot({debugName: 'indexPlus1', type: 'number' }, nextIndex);
-      const resultIntExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (${exp.op})`,
         intSlots: [ ...operandNamedSlots, nNamedSlot ],
-        extSlots: operandResult.extSlots,
+        extSlots: operandR.extSlots,
       };
-      const sigExtSlots = resultIntExt.extSlots.map((name) => ({name: mkDLVarUnsafe(`e_${name}`), type: getScalarTypeFromScope(name, env.scope)}));
+      const sigExtSlots = resultR.extSlots.map((name) => ({name: mkDLVarUnsafe(`e_${name}`), type: getScalarTypeFromScope(name, env.scope)}));
       return {
-        ...resultIntExt,
+        ...resultR,
         program: [
-          ...operandResult.program,
+          ...operandR.program,
           '',
-          comment(`${resultIntExt.relName}: ${Relat.rangeString(exp.range)} (index)`),
           {
             type: 'decl',
-            relName: resultIntExt.relName,
+            relName: resultR.name,
             sig: [
               ...operandNamedSlots,
               nNamedSlot,
@@ -1019,21 +1030,21 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           },
           {
             type: 'rule',
-            head: atom(resultIntExt, [ ...operandNamedSlots, nNamedSlot ]),
+            head: atom(resultR, [ ...operandNamedSlots, nNamedSlot ]),
             body: [
-              atom(operandResult, operandNamedSlots),
+              atom(operandR, operandNamedSlots),
               `${nNamedSlot.name} = 0`,
-              ...constraintForExtSlots(resultIntExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
           {
             type: 'rule',
-            head: atom(resultIntExt, [ ...operandNamedSlots, nPlus1NamedSlot ]),
+            head: atom(resultR, [ ...operandNamedSlots, nPlus1NamedSlot ]),
             body: [
-              atom(resultIntExt, [ ...operandNamedSlots.map(() => unnamedDLVar), nNamedSlot ]),
-              atom(operandResult, operandNamedSlots),
+              atom(resultR, [ ...operandNamedSlots.map(() => unnamedDLVar), nNamedSlot ]),
+              atom(operandR, operandNamedSlots),
               `${nPlus1NamedSlot.name} = ${nNamedSlot.name} + 1`,
-              ...constraintForExtSlots(resultIntExt.extSlots, env.scope),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -1049,85 +1060,87 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
 
       // we translate the operand directly just to check type
       {
-        const operandResult = translate(exp.operand, env);
-        if (operandResult.intSlots.length === 0) {
+        const operandR = translate(exp.operand, env);
+        if (operandR.intSlots.length === 0) {
           throw new Error(`Cannot ${exp.op} relation with arity 0`);
         }
-        if (operandResult.intSlots[operandResult.intSlots.length - 1].type !== 'symbol') {
+        if (operandR.intSlots[operandR.intSlots.length - 1].type !== 'symbol') {
           throw new Error(`Cannot ${exp.op} relation with non-symbol last argument`);
         }
       }
       // now we translate "index operand" for real
-      const indexOperandResult = translate(Relat.addMeta(Relat.o('index', exp.operand), { range: exp.range }), env);
-      const inputSlot = indexOperandResult.intSlots[indexOperandResult.intSlots.length - 2];
+      const indexOperandR = translate(Relat.addMeta(Relat.o('index', exp.operand), { range: exp.range }), env);
+      const inputSlot = indexOperandR.intSlots[indexOperandR.intSlots.length - 2];
       const aNamedSlot = nameSlot(inputSlot, nextIndex);
       const bNamedSlot = nameSlot(inputSlot, nextIndex);
       const aPlusBNamedSlot = nameSlot(inputSlot, nextIndex);
       const nNamedSlot = nameSlot({debugName: 'index', type: 'number' }, nextIndex);
       const mNamedSlot = nameSlot({debugName: 'index', type: 'number' }, nextIndex);
       const nPlus1NamedSlot = nameSlot({debugName: 'indexPlus1', type: 'number' }, nextIndex);
-      const accIntExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const accR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (concat: accumulator)`,
         intSlots: [ aNamedSlot, nNamedSlot ],
-        extSlots: indexOperandResult.extSlots,
+        extSlots: indexOperandR.extSlots,
       };
-      const topIndexIntExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const topIndexR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (concat: top index)`,
         intSlots: [ nNamedSlot ],
-        extSlots: indexOperandResult.extSlots,
+        extSlots: indexOperandR.extSlots,
       };
-      const resultIntExt: IntExt = {
-        relName: `R${env.nextIndex()}`,
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (concat)`,
         intSlots: [ aNamedSlot ],
-        extSlots: indexOperandResult.extSlots,
+        extSlots: indexOperandR.extSlots,
       };
       return {
-        ...resultIntExt,
+        ...resultR,
         program: [
-          ...indexOperandResult.program,
+          ...indexOperandR.program,
           '',
-          comment(`${resultIntExt.relName}: ${Relat.rangeString(exp.range)} (join)`),
-          decl(accIntExt, env.scope),
+          decl(accR, env.scope),
           {
             type: 'rule',
-            head: atom(accIntExt, [ aNamedSlot, nNamedSlot ]),
+            head: atom(accR, [ aNamedSlot, nNamedSlot ]),
             body: [
-              atom(indexOperandResult, [ ...indexOperandResult.intSlots.slice(0, -2).map(() => unnamedDLVar), aNamedSlot, nNamedSlot ]),
+              atom(indexOperandR, [ ...indexOperandR.intSlots.slice(0, -2).map(() => unnamedDLVar), aNamedSlot, nNamedSlot ]),
               `${nNamedSlot.name} = 0`,
-              ...constraintForExtSlots(accIntExt.extSlots, env.scope),
+              ...constraintForExtSlots(accR.extSlots, env.scope),
             ],
           },
           {
             type: 'rule',
-            head: atom(accIntExt, [ aPlusBNamedSlot, nPlus1NamedSlot ]),
+            head: atom(accR, [ aPlusBNamedSlot, nPlus1NamedSlot ]),
             body: [
-              atom(accIntExt, [ aNamedSlot, nNamedSlot ]),
-              atom(indexOperandResult, [ ...indexOperandResult.intSlots.slice(0, -2).map(() => unnamedDLVar), bNamedSlot, nPlus1NamedSlot ]),
+              atom(accR, [ aNamedSlot, nNamedSlot ]),
+              atom(indexOperandR, [ ...indexOperandR.intSlots.slice(0, -2).map(() => unnamedDLVar), bNamedSlot, nPlus1NamedSlot ]),
               `${nPlus1NamedSlot.name} = ${nNamedSlot.name} + 1`,
               `${aPlusBNamedSlot.name} = ${aNamedSlot.name} + "," + ${bNamedSlot.name}`,
-              ...constraintForExtSlots(accIntExt.extSlots, env.scope),
+              ...constraintForExtSlots(accR.extSlots, env.scope),
             ],
           },
-          decl(topIndexIntExt, env.scope),
+          decl(topIndexR, env.scope),
           {
             type: 'rule',
-            head: atom(topIndexIntExt, [ nNamedSlot ]),
+            head: atom(topIndexR, [ nNamedSlot ]),
             body: [
               {
-                ...atom(indexOperandResult, [ ...indexOperandResult.intSlots.slice(0, -1).map(() => unnamedDLVar), mNamedSlot.name]),
+                ...atom(indexOperandR, [ ...indexOperandR.intSlots.slice(0, -1).map(() => unnamedDLVar), mNamedSlot.name]),
                 aggregate: { type: 'max', input: mNamedSlot.name, output: nNamedSlot.name },
               },
-              ...constraintForExtSlots(topIndexIntExt.extSlots, env.scope),
+              ...constraintForExtSlots(topIndexR.extSlots, env.scope),
             ],
           },
-          decl(resultIntExt, env.scope),
+          decl(resultR, env.scope),
           {
             type: 'rule',
-            head: atom(resultIntExt, [ aNamedSlot ]),
+            head: atom(resultR, [ aNamedSlot ]),
             body: [
-              atom(accIntExt, [ aNamedSlot, nNamedSlot ]),
-              atom(topIndexIntExt, [ nNamedSlot ]),
-              ...constraintForExtSlots(resultIntExt.extSlots, env.scope),
+              atom(accR, [ aNamedSlot, nNamedSlot ]),
+              atom(topIndexR, [ nNamedSlot ]),
+              ...constraintForExtSlots(resultR.extSlots, env.scope),
             ],
           },
         ],
@@ -1150,11 +1163,11 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
 
 export function translationResultToFullProgram(
   result: TranslationResult,
-  scope: Record<RelatVariable, RelatVariableBinding & {type: 'relation'}>
+  scope: ScopeRelationsOnly
 ): DL.Program {
   return [
-    ...entries(scope).flatMap(([relName, { intExt }]) => [
-      decl(intExt, {}),
+    ...[...scope].flatMap(([relName, { rel: intExt }]) => [
+      decl(intExt, new Map()),
       { type: 'input', relName } satisfies DL.Command,
     ]),
     '',
@@ -1162,7 +1175,7 @@ export function translationResultToFullProgram(
     '',
     {
       type: 'output',
-      relName: result.relName,
+      relName: result.name,
     }
   ];
 }
