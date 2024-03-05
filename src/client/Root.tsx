@@ -1,6 +1,9 @@
 import clsx from 'clsx';
+import { AnimatePresence, motion } from 'framer-motion';
 import _ from 'lodash';
 import { ReactNode, memo, useEffect, useMemo, useState } from 'react';
+import { BsArrowsCollapseVertical, BsArrowsExpandVertical } from 'react-icons/bs';
+import { MdForward } from 'react-icons/md';
 import { Program, programToString } from '../dl.js';
 import { entries } from '../misc.js';
 import { SyntaxError } from '../relat-grammar/relat-grammar.js';
@@ -9,11 +12,9 @@ import { Environment, SRelation, ScopeRelationsOnly, mkNextIndex, mkRelatVarUnsa
 import { Expression, stripMeta, toSexpr } from '../relat.js';
 import { Relation, inferTypes, runSouffle } from '../souffle-run.js';
 import { Scenario, scenarios } from './scenarios.js';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/Tooltip.js';
-import { Switch } from './shadcn/Switch.js';
 import { Label } from './shadcn/Label.js';
-import { MdForward, MdRedo } from 'react-icons/md';
-import { BsArrowsCollapse, BsArrowsCollapseVertical, BsArrowsExpandVertical } from 'react-icons/bs';
+import { Switch } from './shadcn/Switch.js';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/Tooltip.js';
 
 type ProcessResult = {
   steps: {
@@ -119,13 +120,13 @@ export const Root = memo(() => {
     }
   }, [textArea, code]);
 
-  const arrowToggle = (
-    <div className='self-center flex flex-col items-center cursor-pointer group' onClick={() => setShowIntermediates((x) => !x)}>
+  const arrowToggle = (key: string) => (
+    <motion.div key={key} className='self-center flex flex-col items-center cursor-pointer group' onClick={() => setShowIntermediates((x) => !x)}>
       <MdForward className='text-4xl'/>
       <div className='invisible group-hover:visible'>
         { showIntermediates ? <BsArrowsCollapseVertical /> : <BsArrowsExpandVertical />}
       </div>
-    </div>
+    </motion.div>
   );
 
   return <div className='main-column flex flex-col p-6 w-full h-full'>
@@ -220,39 +221,51 @@ export const Root = memo(() => {
           <Label htmlFor="airplane-mode">execution enabled?</Label>
         </div>
       </div>
-      { showIntermediates
-        ? <>
-            {arrowToggle}
-            <div className='flex flex-col flex-1'>
-              <div className={clsx('flex flex-col', !processed?.steps.ast && "opacity-50")}>
-                <h2 className='text-xl font-bold'>code ast</h2>
-                { !lastGoodSteps.ast
-                ? <p>not ready yet</p>
-                : <details className='flex flex-col'>
-                    <summary className='flex whitespace-pre-wrap font-mono'>
-                      {toSexpr(lastGoodSteps.ast)}
-                    </summary>
-                    <pre className='overflow-auto min-h-0'>
-                      {JSON.stringify(stripMeta(lastGoodSteps.ast), null, 2)}
-                    </pre>
-                  </details>
-                }
+      <AnimatePresence initial={false}>
+        { showIntermediates ? [
+            arrowToggle('left'),
+            <motion.div
+              key="column"
+              className='flex flex-col min-w-0 overflow-x-hidden'
+              initial='absent' animate='present' exit='absent'
+              variants={{
+                present: { opacity: "100%", flex: "1 0 0", margin: '0 0px',  transition: { opacity: {duration: 0, delay: 0.3} } },
+                absent: { opacity: 0, flex: "0 0 0", margin: '0 -50px', transition: { opacity: {duration: 0} }  },
+              }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className='min-w-96'>
+                <div className={clsx('flex flex-col', !processed?.steps.ast && "opacity-50")}>
+                  <h2 className='text-xl font-bold'>code ast</h2>
+                  { !lastGoodSteps.ast
+                  ? <p>not ready yet</p>
+                  : <details className='flex flex-col'>
+                      <summary className='flex whitespace-pre-wrap font-mono'>
+                        {toSexpr(lastGoodSteps.ast)}
+                      </summary>
+                      <pre className='overflow-auto min-h-0'>
+                        {JSON.stringify(stripMeta(lastGoodSteps.ast), null, 2)}
+                      </pre>
+                    </details>
+                  }
+                </div>
+                <div className='h-4'/>
+                <div className={clsx('flex flex-col min-h-0', !processed?.steps.translatedProgram && "opacity-50")}>
+                  <h2 className='text-xl font-bold'>generated Datalog</h2>
+                  { !lastGoodSteps.translatedProgram
+                  ? <p>not ready yet</p>
+                  : <div className="overflow-auto">
+                      <DatalogView program={programToString(lastGoodSteps.translatedProgram)} />
+                    </div>
+                  }
+                </div>
               </div>
-              <div className='h-4'/>
-              <div className={clsx('flex flex-col min-h-0', !processed?.steps.translatedProgram && "opacity-50")}>
-                <h2 className='text-xl font-bold'>generated Datalog</h2>
-                { !lastGoodSteps.translatedProgram
-                ? <p>not ready yet</p>
-                : <div className="overflow-auto">
-                    <DatalogView program={programToString(lastGoodSteps.translatedProgram)} />
-                  </div>
-                }
-              </div>
-            </div>
-            {arrowToggle}
-          </>
-        : arrowToggle
-      }
+            </motion.div>,
+            arrowToggle('right')
+          ] :
+          arrowToggle('left')
+        }
+      </AnimatePresence>
       <div className={clsx("flex flex-col flex-1 min-h-0 overflow-hidden ", !processed?.steps.output && "opacity-50")}>
           <h2 className='text-xl font-bold'>result</h2>
           { !lastGoodSteps.output
