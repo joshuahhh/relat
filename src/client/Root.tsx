@@ -121,7 +121,7 @@ export const Root = memo(() => {
   }, [textArea, code]);
 
   const arrowToggle = (key: string) => (
-    <motion.div key={key} className='self-center flex flex-col items-center cursor-pointer group' onClick={() => setShowIntermediates((x) => !x)}>
+    <motion.div key={key} className='self-start mt-10 flex flex-col items-center cursor-pointer group' onClick={() => setShowIntermediates((x) => !x)}>
       <MdForward className='text-4xl'/>
       <div className='invisible group-hover:visible'>
         { showIntermediates ? <BsArrowsCollapseVertical /> : <BsArrowsExpandVertical />}
