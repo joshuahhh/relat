@@ -41,6 +41,8 @@ describe("parseRelat", () => {
     ["x : y | z", { type: "comprehension", variables: ["x"], constraint: y, body: z }],
     ["x, y : z | w", { type: "comprehension", variables: ["x", "y"], constraint: z, body: w }],
     ["100", { type: "constant", value: 100 }],
+    // TODO: we don't have float constants yet
+    // ["100.1", { type: "constant", value: 100.1 }],
     ["'str'", { type: "constant", value: "str" }],
     ["\"str\"", { type: "constant", value: "str" }],
     ["iden", { type: "identifier", name: "iden" }],

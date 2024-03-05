@@ -27,6 +27,17 @@ describe("runRelat", () => {
     expect(await runRelat("'a' < 'a'", {})).toEqual(FALSE);
   });
 
+  it("equality of strings, relation lookup", async () => {
+    expect(await runRelat(`x, y : rel | x = "abc"`, {
+      rel: inferTypes([["abc", 100], ["def", 200]]),
+    })).toEqual(inferTypes([["abc", 100]]));
+  });
+
+  it("equality of numbers", async () => {
+    expect(await runRelat("100 = 100", {})).toEqual(TRUE);
+    expect(await runRelat("100 = 200", {})).toEqual(FALSE);
+  });
+
   it("arithmetic", async () => {
     expect(await runRelat("100 + 200", {})).toEqual(inferTypes([[300]]));
     expect(await runRelat("200 - 100", {})).toEqual(inferTypes([[100]]));
@@ -155,9 +166,7 @@ describe("runRelat", () => {
     expect(await runRelat("some rel", { rel })).toEqual(FALSE);
   });
 
-  // TODO: This test fails because we can't feed TRUE into Souffle! Not great,
-  // but hasn't actually mattered yet.
-  it.fails("not (on TRUE)", async () => {
+  it("not (on TRUE)", async () => {
     expect(await runRelat("not rel", { rel: TRUE })).toEqual(FALSE);
   });
 

@@ -898,7 +898,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           '',
           decl(resultR, env.scope),
           ruleScoped(resultR, [ namedSlot ], [
-            `(${namedSlot.name} = ${typeof exp.value === 'string' ? `"${exp.value}"` : exp.value})`,
+            `(${namedSlot.name} = ${typeof exp.value === 'string' ? `${JSON.stringify(exp.value)}` : exp.value})`,
           ], env.scope),
         ],
       };

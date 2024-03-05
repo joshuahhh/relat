@@ -35,9 +35,11 @@ async function process(code: string, inputs: Record<string, Relation>, execution
     // TODO: this is kinda a copy-paste replica of runRelat which outputs
     // intermediate values; maybe runRelat should provide this as an option?
 
+    // TODO: this desugaring is probably very inefficient
+    // (at the very least, <_> should be cached)
     const codeDesugared = code
-      .replaceAll("<_>", "okv[_]")
-      .replaceAll(/<([A-Za-z_][A-Za-z0-9_]*)>/g, 'okv["$1"]');
+      .replaceAll("<_>", `(VAR1, VAR2, VAR3 : okv -> VAR1, VAR3)`)
+      .replaceAll(/<([A-Za-z_][A-Za-z0-9_]*)>/g, `(VAR1, VAR2, VAR3 : okv -> VAR1, VAR2 = "$1", VAR3)`);
     const ast = parseRelat(codeDesugared);
     toReturn.steps.ast = ast;
     const inputRelations = _.mapValues(inputs, inferTypes);
@@ -158,12 +160,17 @@ export const Root = memo(() => {
           </button>
         )}
       </div>
+      { scenario.info &&
+        <div className='flex flex-col justify-end mb-6 overflow-y-scroll max-w-60'>
+          {scenario.info}
+        </div>
+      }
       <div className='flex flex-row overflow-x-scroll'>
         {entries(scenario.inputs).map(([name, relation]) => <>
           <div key={name} className="flex flex-col items-start w-fit">
             <h3 className='text-lg font-bold'>{name}</h3>
             <div className='overflow-y-scroll w-fit'>
-              <RelationView relation={relation} inspectableValues={scenario.inspectableValues} />
+              <RelationView relation={relation} valueInspectors={scenario.valueInspectors} />
             </div>
           </div>
           <div className='bg-gray-500 min-w-px h-full mx-2'/>
@@ -280,7 +287,7 @@ export const Root = memo(() => {
           { !lastGoodSteps.output
           ? <p>processing...</p>
           : <div className='overflow-y-scroll'>
-              <RelationView relation={lastGoodSteps.output} inspectableValues={scenario.inspectableValues} />
+              <RelationView relation={lastGoodSteps.output} valueInspectors={scenario.valueInspectors} />
             </div>
           }
       </div>
@@ -387,9 +394,9 @@ const HighlightSubstrings: React.FC<HighlightSubstringsProps> = ({ str, pairs })
 
 const RelationView = memo((props: {
   relation: Relation,
-  inspectableValues?: Map<any, any>,
+  valueInspectors?: Map<any, ReactNode>,
 }) => {
-  const { relation, inspectableValues = new Map() } = props;
+  const { relation, valueInspectors = new Map() } = props;
   const [maxTuples, setMaxTuples] = useState(50);
 
   if (relation.types.length === 0) {
@@ -413,16 +420,15 @@ const RelationView = memo((props: {
           <tr key={i}>
             {row.map((value, j) => {
               let content: ReactNode = String(value);
-              const maybeInspectableValue = inspectableValues.get(value);
-              if (maybeInspectableValue !== undefined) {
+              const maybeValueInspector = valueInspectors.get(value);
+              if (maybeValueInspector !== undefined) {
                 content = <TooltipProvider>
-                  <Tooltip delayDuration={0} disableHoverableContent={true}>
+                  <Tooltip
+                    delayDuration={0}
+                    // disableHoverableContent={true}
+                  >
                     <TooltipTrigger className='underline decoration-dotted'>{content}</TooltipTrigger>
-                    <TooltipContent>
-                      <pre className='text-xs max-w-xl max-h-96 overflow-auto'>
-                        {JSON.stringify(inspectableValues.get(value), null, 2)}
-                      </pre>
-                    </TooltipContent>
+                    <TooltipContent>{maybeValueInspector}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>;
               }

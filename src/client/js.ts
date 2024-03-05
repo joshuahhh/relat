@@ -1,5 +1,5 @@
 import { mkNextIndex } from '../relat-to-dl.js';
-import { Relation } from '../souffle-run.js';
+import { Relation, emptyRelation } from '../souffle-run.js';
 
 
 export type JsObjDB = {
@@ -9,23 +9,18 @@ export type JsObjDB = {
     okv: Relation,
     str: Relation,
     num: Relation,
+    special: Relation,
   },
   idToObj: Map<string, any>,
   rootId: string,
 }
 
 export function mkJsObjDB(obj: any): JsObjDB {
-  let okv: Relation = {
-    types: ["symbol", "symbol", "symbol"],
-    tuples: [],
-  }
-  let string: Relation = {
-    types: ["symbol", "symbol"],
-    tuples: [],
-  };
-  let number: Relation = {
-    types: ["symbol", "number"],
-    tuples: [],
+  let inputs = {
+    okv: emptyRelation(["symbol", "symbol", "symbol"]),
+    str: emptyRelation(["symbol", "symbol"]),
+    num: emptyRelation(["symbol", "number"]),
+    special: emptyRelation(["symbol", "symbol"]),
   };
 
   const nextIndex = mkNextIndex();
@@ -42,15 +37,21 @@ export function mkJsObjDB(obj: any): JsObjDB {
     objToId.set(obj, id);
     idToObj.set(id, obj);
 
-    if (typeof obj === 'object') {
+    if (obj === null) {
+      inputs.special.tuples.push([id, "null"]);
+    } else if (obj === undefined) {
+      inputs.special.tuples.push([id, "undefined"]);
+    } else if (typeof obj === 'object') {
       for (const [key, value] of Object.entries(obj)) {
         const valueId = scanAndGetId(value);
-        okv.tuples.push([id, key, valueId]);
+        inputs.okv.tuples.push([id, key, valueId]);
       }
     } else if (typeof obj === 'string') {
-      string.tuples.push([id, JSON.stringify(obj)]);
+      inputs.str.tuples.push([id, JSON.stringify(obj)]);
     } else if (typeof obj === 'number') {
-      number.tuples.push([id, obj]);
+      inputs.num.tuples.push([id, obj]);
+    } else if (typeof obj === 'boolean') {
+      inputs.special.tuples.push([id, obj ? "true" : "false"]);
     } else {
       throw new Error(`unexpected type ${typeof obj}`);
     }
@@ -70,5 +71,5 @@ export function mkJsObjDB(obj: any): JsObjDB {
     tuples: [...objToId.values()].map(obj => [obj]),
   };
 
-  return { inputs: {root, any, okv, str: string, num: number}, idToObj, rootId };
+  return { inputs: { root, any, ...inputs }, idToObj, rootId };
 }

@@ -28,7 +28,10 @@ export function inferTypes(tuples: Relation | unknown[][]): Relation {
     throw new Error(`Cannot infer types of empty relation`);
   }
   return {
-    types: tuples[0].map(value => typeof value === 'number' ? 'number' : 'symbol'),
+    types: tuples[0].map(value =>
+      typeof value === 'number'
+      ? 'number'  // TODO: add support for floats
+      : 'symbol'),
     tuples,
   };
 }
@@ -56,6 +59,10 @@ const tuples = data.trim().split('\n').map(line => line.split('\t').map(s => par
 }
 
 function stringifyRelation(data: Relation): string {
+  // special case: no columns, one row
+  if (data.types.length === 0 && data.tuples.length === 1) {
+    return '()\n';
+  }
   return data.tuples.map(row => row.join('\t')).join('\n');
 }
 
@@ -107,6 +114,7 @@ export async function runSouffle(
     if (filename.endsWith('.csv')) {
       const relationName = filename.slice(0, -4);
       const contents = module.FS.readFile(filename, { encoding: 'utf8' });
+      console.log(filename, JSON.stringify(contents));
       if (contents.trim() === '') {
         // special case: no columns, no rows
         outputRelations[relationName] = { types: [], tuples: [] };

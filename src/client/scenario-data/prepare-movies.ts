@@ -22,11 +22,12 @@ async function main() {
   const hasDirector = titleAnd("Director")
   const hasYear = titleAnd("Year")
   const hasRuntimeMin = titleAnd("Runtime (Minutes)")
-  const hasRating = titleAnd("Rating")
-  const hasRevenueMil = titleAnd("Revenue (Millions)")
+  // TODO: float support
+  // const hasRating = titleAnd("Rating")
+  // const hasRevenueMil = titleAnd("Revenue (Millions)")
 
-  await fsP.writeFile(new URL("movies-inputs.json", import.meta.url), stringify({
-    isTitle, hasGenre, hasActor, hasDirector, hasYear, hasRuntimeMin, hasRating, hasRevenueMil
+  await fsP.writeFile(new URL("movies.json", import.meta.url), stringify({
+    isTitle, hasGenre, hasActor, hasDirector, hasYear, hasRuntimeMin
   }));
 };
 
