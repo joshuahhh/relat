@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { simpleFamily } from "../src/client/scenarios.js";
 import { runRelat } from "../src/relat-run.js";
-import { Relation, emptyLike, inferTypes } from "../src/souffle-run.js";
+import { Relation, emptyLike, emptyRelation, inferTypes } from "../src/souffle-run.js";
 
 describe("runRelat", () => {
   const TRUE: Relation = { types: [], tuples: [[]] };
@@ -146,15 +146,28 @@ describe("runRelat", () => {
   });
 
   it("some (positive)", async () => {
-    const rel: Relation = { types: ["number"], tuples: [[100]] };
-    const output = await runRelat("some rel", { rel });
-    expect(output).toEqual(TRUE);
+    const rel = inferTypes([[100]]);
+    expect(await runRelat("some rel", { rel })).toEqual(TRUE);
   });
 
   it("some (negative)", async () => {
-    const rel: Relation = { types: ["number"], tuples: [] };
-    const output = await runRelat("some rel", { rel });
-    expect(output).toEqual(FALSE);
+    const rel = emptyRelation(["number"]);
+    expect(await runRelat("some rel", { rel })).toEqual(FALSE);
+  });
+
+  // TODO: This test fails because we can't feed TRUE into Souffle! Not great,
+  // but hasn't actually mattered yet.
+  it.fails("not (on TRUE)", async () => {
+    expect(await runRelat("not rel", { rel: TRUE })).toEqual(FALSE);
+  });
+
+  it("not (on FALSE)", async () => {
+    expect(await runRelat("not rel", { rel: FALSE })).toEqual(TRUE);
+  });
+
+  it("not (on relations)", async () => {
+    expect(await runRelat("not rel", { rel: inferTypes([[100]]) })).toEqual(FALSE);
+    expect(await runRelat("not rel", { rel: emptyRelation(["number"]) })).toEqual(TRUE);
   });
 
   it("application, single argument", async () => {

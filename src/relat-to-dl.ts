@@ -436,7 +436,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           operandR.program,
           '',
           decl(resultR, env.scope),
-          ruleScoped(resultR, operandNamedSlots, [
+          ruleScoped(resultR, [], [
             negated(atom(operandR, operandNamedSlots.map(() => wildcard))),
           ], env.scope),
         ],
@@ -1049,7 +1049,7 @@ export function translationResultToFullProgram(
   scope: ScopeRelationsOnly
 ): DL.Program {
   return [
-    ...[...scope].flatMap(([relName, { rel }]) => [
+    [...scope].flatMap(([relName, { rel }]) => [
       decl(rel, new Map()),
       { type: 'input', relName } satisfies DL.Command,
     ]),

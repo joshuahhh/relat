@@ -62,6 +62,8 @@ export async function runSouffle(
   code: string,
   inputRelations: Record<string, Relation | any[][]>
 ): Promise<Record<string, Relation>> {
+  // console.log(code);
+
   // let now = Date.now();
   const errorLines: string[] = [];
   const module = await loadSouffleModule({
