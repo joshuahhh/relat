@@ -24,7 +24,7 @@ export type Expression<Meta = {range: Range}> = Meta & (
     }
   | {
       type: 'unary',
-      op: 'some' | 'not' | '#' | '^' | '*' | '~' | 'min' | 'max' | 'sum' | '[_]' | 'index' | 'concat',
+      op: 'some' | 'not' | '#' | '^' | '~' | 'min' | 'max' | 'sum' | '[_]' | 'index' | 'concat',
       operand: Expression<Meta>,
     }
   | {
@@ -34,7 +34,7 @@ export type Expression<Meta = {range: Range}> = Meta & (
       right: Expression<Meta>,
     }
   | {
-      type: 'comprehension',
+      type: 'comprehension' | 'comprehension-alt',
       variables: string[],
       constraint: Expression<Meta>,
       body: Expression<Meta>,
@@ -63,7 +63,8 @@ export function stripMeta<Meta>(expr: Expression<Meta>): Expression<{}> {
     case 'binary':
       return { type: 'binary', op: expr.op, left: stripMeta(expr.left), right: stripMeta(expr.right) };
     case 'comprehension':
-      return { type: 'comprehension', variables: expr.variables, constraint: stripMeta(expr.constraint), body: stripMeta(expr.body) };
+    case 'comprehension-alt':
+      return { type: expr.type, variables: expr.variables, constraint: stripMeta(expr.constraint), body: stripMeta(expr.body) };
     case 'let':
       return { type: 'let', variable: expr.variable, value: stripMeta(expr.value), body: stripMeta(expr.body) };
     case 'formula':
@@ -84,7 +85,8 @@ export function toSexpr<Meta>(expr: Expression<Meta>): string {
     case 'binary':
       return `(${expr.op} ${toSexpr(expr.left)} ${toSexpr(expr.right)})`;
     case 'comprehension':
-      return `(comprehension ${expr.variables} ${toSexpr(expr.constraint)} ${toSexpr(expr.body)})`;
+    case 'comprehension-alt':
+      return `(${expr.type} ${expr.variables} ${toSexpr(expr.constraint)} ${toSexpr(expr.body)})`;
     case 'let':
       return `(let ${expr.variable} ${toSexpr(expr.value)} ${toSexpr(expr.body)})`;
     case 'formula':

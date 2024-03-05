@@ -112,6 +112,25 @@ describe("runRelat", () => {
     expect(await runRelat("x : rel | y : rel | x < y", { rel })).toEqual(inferTypes([[100, 200]]));
   });
 
+  it("alt comprehension", async () => {
+    const rel = inferTypes([[100], [200], [300]]);
+    expect(await runRelat("x : rel -> x", { rel })).toEqual(rel);
+  });
+
+  it("alt comprehension to do transpose", async () => {
+    const rel = inferTypes([[1, 2], [2, 3], [3, 4], [10, 11]]);
+    expect(await runRelat("x, y : rel -> y, x", { rel })).toEqual(inferTypes(
+      [[2, 1], [3, 2], [4, 3], [11, 10]]
+    ));
+  });
+
+  it("alt comprehension to do projection", async () => {
+    const rel = inferTypes([[1, 2], [2, 3], [3, 4], [10, 11]]);
+    expect(await runRelat("x, y : rel -> x", { rel })).toEqual(inferTypes(
+      [[1], [2], [3], [10]]
+    ));
+  });
+
   it("transitive closure", async () => {
     const rel = inferTypes([[1, 2], [2, 3], [3, 4], [10, 11]]);
     expect(await runRelat("^rel", { rel })).toEqual(inferTypes(

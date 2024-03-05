@@ -85,7 +85,7 @@ E5b
     { return associateLeftWithFuncs(left, rights); }
 
 E6
-  = op:("^" / "*" / "~") _ operand:E6
+  = op:("^" / "~") _ operand:E6
     { return { type: "unary", op, operand, range: range() }; }
   / E7
 
@@ -97,6 +97,9 @@ E7
   / variableFirst:Identifier variableRest:( _ "," _ variable:Identifier { return variable; })*
       _ ":" _ constraint:Expression _ "|" _ body:Expression
     { return { type: "comprehension", variables: [variableFirst, ...variableRest], constraint, body, range: range() }; }
+  / variableFirst:Identifier variableRest:( _ "," _ variable:Identifier { return variable; })*
+      _ ":" _ constraint:Expression _ "->" _ body:Expression
+    { return { type: "comprehension-alt", variables: [variableFirst, ...variableRest], constraint, body, range: range() }; }
   / number:($([1-9][0-9]*) / "0")
     { return { type: "constant", value: Number(number), range: range() }; }
   / "'" _ string:$([^']*) _ "'"

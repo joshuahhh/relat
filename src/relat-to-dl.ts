@@ -339,10 +339,11 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ], env.scope),
         ],
       };
-    } else if (exp.type === 'comprehension') {
+    } else if (exp.type === 'comprehension' || exp.type === 'comprehension-alt') {
       /*****************
-       * COMPREHENSION *
+       * COMPREHENSION * (inc. "alt comprehension")
        *****************/
+      const isAlt = exp.type === 'comprehension-alt';
       const newRelatVars = exp.variables.map(mkRelatVarUnsafe);
       for (const newRelatVar of newRelatVars) {
         if (env.scope.has(newRelatVar)) {
@@ -377,7 +378,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
       const resultR: SRelation = {
         name: `R${env.nextIndex()}`,
         debugDesc: `"${Relat.rangeString(exp.range)}" (comprehension)`,
-        intSlots: [ ...newIntSlots, ...bodyNamedSlots ],
+        intSlots: [ ...isAlt ? [] : newIntSlots, ...bodyNamedSlots ],
         extSlots: _.difference(bodyResult.extSlots, newRelatVars),
       };
       return {
@@ -387,7 +388,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ...bodyResult.program,
           '',
           decl(resultR, env.scope),
-          ruleScoped(resultR, [ ...newRelatVars, ...bodyNamedSlots ], [
+          ruleScoped(resultR, [ ...isAlt ? [] : newRelatVars, ...bodyNamedSlots ], [
             atom(constraintResult, newRelatVars),
             atom(bodyResult, bodyNamedSlots),
           ], env.scope),
@@ -440,14 +441,10 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ], env.scope),
         ],
       };
-    } else if (exp.type === 'unary' && (exp.op === '^' || exp.op === '*')) {
+    } else if (exp.type === 'unary' && exp.op === '^') {
       /******************************
        * TRANSITIVE CLOSURE (^ / *) *
        ******************************/
-      if (exp.op === '*') {
-        // TODO: I don't actually know how to handle this; what's the universe?
-        throw new Error(`Reflexive transitive closure (*) not yet implemented`);
-      }
       const operandR = translate(exp.operand, env);
       if (operandR.intSlots.length !== 2) {
         throw new Error(`Transitive closure must have arity 2`);
@@ -958,7 +955,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ], env.scope),
         ],
       };
-    } else if (exp.op === 'concat') {
+    } else if (exp.type === 'unary' && exp.op === 'concat') {
       // construct index_operand
       // acc(A, 0) :- index_operand(_..., A, 0)
       // acc(A + B, N + 1) :- acc(A, N), index_operand(_..., B, N + 1)

@@ -35,7 +35,6 @@ describe("parseRelat", () => {
     ["x . y . z", o(".", o(".", x, y), z)],
     // E6
     ["^x", o("^", x)],
-    ["*x", o("*", x)],
     ["~x", o("~", x)],
     ["let x = y | z", { type: "let", variable: "x", value: y, body: z }],
     ["(x)", x],
@@ -60,12 +59,13 @@ describe("parseRelat", () => {
     ["concat x", o("concat", x)],
     ["x + y", o("+", x, y)],
     ["x * y", o("*", x, y)],
+    ["x : y -> z", { type: "comprehension-alt", variables: ["x"], constraint: y, body: z }],
 
     // compounds
     ["some not x", o("some", o("not", x))],
     ["not some x", o("not", o("some", x))],
-    ["*x;y", o(";", o("*", x), y)],
-    ["*x.y", o(".", o("*", x), y)],
+    ["^x;y", o(";", o("^", x), y)],
+    ["^x.y", o(".", o("^", x), y)],
     ["#x.y", o("#", o(".", x, y))],
     ["some x.y", o("some", o(".", x, y))],
     ["some x & y", o("&", o("some", x), y)],

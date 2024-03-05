@@ -80,14 +80,16 @@ export async function runSouffle(
   });
 
   // now = Date.now();
+  let exitCode = 0;
   try {
-    module.callMain(['--no-preprocessor', 'myfile.dl']);
+    // TODO: @types is out of date; see https://github.com/emscripten-core/emscripten/pull/14865
+    exitCode = module.callMain(['--no-preprocessor', 'myfile.dl']) as any as number;
   } catch (e) {
     throw e;
   }
   // console.log("calling main took", Date.now() - now);
 
-  if (errorLines.length > 0) {
+  if (exitCode !== 0) {
     console.error("Souffle error:")
     console.error(errorLines.map((line) => `  ${line}`).join('\n'));
     console.error("Running code:");
