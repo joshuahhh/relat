@@ -570,7 +570,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ], env.scope),
         ],
       };
-    } else if (exp.type === 'binary' && exp.op === '-') {
+    } else if (exp.type === 'binary' && exp.op === '\\') {
       /**************
        * DIFFERENCE *
        **************/
@@ -843,6 +843,41 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
             atom(leftResult, [ leftVar ]),
             atom(rightResult, [ rightVar ]),
              `(${leftVar} ${exp.op} ${rightVar})`,
+          ], env.scope),
+        ],
+      };
+    } else if (exp.type === 'binary' && (exp.op === '+' || exp.op === '-' || exp.op === '*' )) {
+      /**************
+       * ARITHMETIC *
+       **************/
+      const leftResult = translate(exp.left, env);
+      const rightResult = translate(exp.right, env);
+      if (leftResult.intSlots.length !== 1 || leftResult.intSlots[0].type !== 'number') {
+        throw new Error(`Left-hand side of arithmetic must be numeric`);
+      }
+      if (rightResult.intSlots.length !== 1 || rightResult.intSlots[0].type !== 'number') {
+        throw new Error(`Right-hand side of arithmetic must be numeric`);
+      }
+      const resultVar = nameSlot({ type: 'number', debugName: 'arith' }, nextIndex);
+      const resultR: SRelation = {
+        name: `R${env.nextIndex()}`,
+        debugDesc: `"${Relat.rangeString(exp.range)}" (${exp.op})`,
+        intSlots: [ resultVar ],
+        extSlots: mergeExtSlots(leftResult.extSlots, rightResult.extSlots),
+      };
+      const leftVar = mkDLVar('left', nextIndex);
+      const rightVar = mkDLVar('right', nextIndex);
+      return {
+        ...resultR,
+        program: [
+          leftResult.program,
+          rightResult.program,
+          '',
+          decl(resultR, env.scope),
+          ruleScoped(resultR, [ resultVar ], [
+            atom(leftResult, [ leftVar ]),
+            atom(rightResult, [ rightVar ]),
+             `(${resultVar.name} = ${leftVar} ${exp.op} ${rightVar})`,
           ], env.scope),
         ],
       };

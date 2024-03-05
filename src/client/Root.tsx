@@ -130,7 +130,7 @@ export const Root = memo(() => {
   );
 
   return <div className='main-column flex flex-col p-6 w-full h-full'>
-    <div className="top-row flex flex-row gap-10 h-1/3">
+    <div className="top-row flex flex-row gap-10 max-h-[25%]">
       <div className='flex flex-col justify-end mb-6'>
         <h1 className='text-5xl'>relat</h1>
         <div className='h-2'/>
@@ -142,7 +142,7 @@ export const Root = memo(() => {
             )}
             onClick={() => {
               setScenario(s);
-              setCode(s.examples[0].code);
+              setCode(s.examples[0].code.trim());
             }}
           >
             {s.name}
@@ -162,13 +162,13 @@ export const Root = memo(() => {
       </div>
     </div>
     <hr className='min-h-px my-4 bg-gray-500 border-0'/>
-    <div className='bottom-row flex flex-row min-h-0 gap-8'>
+    <div className='bottom-row flex flex-row min-h-0 gap-8 items-stretch'>
       <div className='flex flex-col flex-1'>
         <h2 className='text-xl font-bold'>try out...</h2>
         <div className='overflow-auto'>
           {scenario.examples.map((example, i) =>
             <button key={i} className='block text-[#646cff] hover:text-[#535bf2] text-left'
-              onClick={() => setCode(example.code)}
+              onClick={() => setCode(example.code.trim())}
             >
               <div className='italic'>
                 {example.description}
@@ -216,7 +216,7 @@ export const Root = memo(() => {
           </pre>
         </>}
         <div className='h-4'/>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 mt-auto">
           <Switch checked={executionEnabled} onCheckedChange={setExecutionEnabled} />
           <Label htmlFor="airplane-mode">execution enabled?</Label>
         </div>
@@ -381,6 +381,8 @@ const RelationView = memo((props: {
   inspectableValues?: Map<any, any>,
 }) => {
   const { relation, inspectableValues = new Map() } = props;
+  const [maxTuples, setMaxTuples] = useState(50);
+
   if (relation.types.length === 0) {
     if (relation.tuples.length === 0) {
       return <div>false ({"{}"})</div>;
@@ -393,8 +395,7 @@ const RelationView = memo((props: {
     return <div>empty relation with signature ({relation.types.join(", ")})</div>;
   }
 
-  const MAX_TUPLES = 20;
-  const tuplesToShow = relation.tuples.slice(0, MAX_TUPLES);
+  const tuplesToShow = relation.tuples.slice(0, maxTuples);
   const numTuplesHidden = relation.tuples.length - tuplesToShow.length;
   return <div className='w-fit'>
     <table style={{borderCollapse: 'collapse'}}>
@@ -427,7 +428,7 @@ const RelationView = memo((props: {
       </tbody>
     </table>
     {numTuplesHidden > 0 &&
-      <div>
+      <div className='cursor-pointer' onClick={() => setMaxTuples((maxTuples) => maxTuples + 10)}>
         + {numTuplesHidden}
       </div>
     }

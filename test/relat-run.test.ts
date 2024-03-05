@@ -27,6 +27,12 @@ describe("runRelat", () => {
     expect(await runRelat("'a' < 'a'", {})).toEqual(FALSE);
   });
 
+  it("arithmetic", async () => {
+    expect(await runRelat("100 + 200", {})).toEqual(inferTypes([[300]]));
+    expect(await runRelat("200 - 100", {})).toEqual(inferTypes([[100]]));
+    expect(await runRelat("100 * 200", {})).toEqual(inferTypes([[20000]]));
+  });
+
   it("relation identifier", async () => {
     const rel: Relation = { types: ["number"], tuples: [[100], [200]] };
     const output = await runRelat("rel", { rel });
@@ -203,7 +209,7 @@ describe("runRelat", () => {
   it("difference", async () => {
     const rel1: Relation = { types: ["number"], tuples: [[100], [200]] };
     const rel2: Relation = { types: ["number"], tuples: [[200], [300]] };
-    const output = await runRelat("rel1 - rel2", { rel1, rel2 });
+    const output = await runRelat("rel1 \\ rel2", { rel1, rel2 });
     expect(output).toEqual({ types: ["number"], tuples: [[100]] });
   });
 
@@ -309,7 +315,7 @@ describe("runRelat", () => {
     expect(hasSadChild2).toEqual({ types: ["number"], tuples: [[20]] });
 
     const hasSadChild3 = await runRelat(
-      `x : isPerson | some (x.hasChild - isHappy)`,
+      String.raw`x : isPerson | some (x.hasChild \ isHappy)`,
       simpleFamily.inputs
     );
     expect(hasSadChild3).toEqual({ types: ["number"], tuples: [[20]] });

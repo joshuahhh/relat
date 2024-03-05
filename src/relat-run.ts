@@ -32,7 +32,7 @@ export async function runRelat(code: string, inputs: Record<string, Relation | a
   const program = translationResultToFullProgram(result, scope);
   const programString = programToString(program);
 
-  const output = await runSouffle(programString, inputs);
+  const output = await runSouffle('.pragma "magic-transform" "*"\n' + programString, inputs);
 
   return {
     ...output[result.name],

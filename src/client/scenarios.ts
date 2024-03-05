@@ -40,7 +40,7 @@ export const movies: Scenario = {
       a1: actors | a2: actors |
       a2 > a1,
       let hasBothActors = hasActor.a1 & hasActor.a2 |
-      #hasBothActors >= 4,
+      #hasBothActors >= 3,
       #hasBothActors, concat hasBothActors
     `,
   }],
@@ -66,10 +66,10 @@ export const simpleFamily: Scenario = {
   },
   examples: [{
     description: "who is unhappy?",
-    code: "isPerson - isHappy",
+    code: String.raw`isPerson \ isHappy`,
   }, {
     description: "who has an unhappy child?",
-    code: "x : isPerson | some (x.hasChild - isHappy)",
+    code: String.raw`x : isPerson | some (x.hasChild \ isHappy)`,
   }, {
     description: "how many children does each person have?",
     code: "x : isPerson | #x.hasChild",

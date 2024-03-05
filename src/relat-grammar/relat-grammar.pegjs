@@ -38,8 +38,8 @@ E1b
     { return associateLeft(",", left, rights, range()); }
 
 E2
-  = left:E2b rights:(_ "-" _ right:E2b { return right })*
-    { return associateLeft("-", left, rights, range()); }
+  = left:E2b rights:(_ "\\" _ right:E2b { return right })*
+    { return associateLeft("\\", left, rights, range()); }
 
 E2b
   = left:E3 rights:(_ "&" _ right:E3 { return right })*
@@ -60,7 +60,11 @@ E4
     { return associateLeftWithFuncs(left, rights); }
 
 E4b
-  = op:("some" / "not" / "#" / "min" / "max" / "sum" / "Σ" / "index" / "concat") _ operand:E4b
+  = left: E4c rights:(_ "*" _ right:E4c { return right })*
+    { return associateLeft("*", left, rights, range()); }
+
+E4c
+  = op:("some" / "not" / "#" / "min" / "max" / "sum" / "Σ" / "index" / "concat") _ operand:E4c
     { return { type: "unary", op: resolveSugar(op), operand, range: range() }; }
   / E5
 
