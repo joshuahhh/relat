@@ -1,23 +1,43 @@
 import clsx from 'clsx';
 import _ from 'lodash';
 import { ReactNode, memo, useEffect, useMemo, useState } from 'react';
-import { programToString } from '../dl.js';
+import { Program, programToString } from '../dl.js';
 import { entries } from '../misc.js';
 import { SyntaxError } from '../relat-grammar/relat-grammar.js';
 import { parseRelat } from '../relat-parse.js';
-import { runRelat } from '../relat-run.js';
 import { Environment, SRelation, ScopeRelationsOnly, mkNextIndex, mkRelatVarUnsafe, translate, translationResultToFullProgram } from '../relat-to-dl.js';
-import { stripMeta, toSexpr } from '../relat.js';
-import { Relation, inferTypes } from '../souffle-run.js';
+import { Expression, stripMeta, toSexpr } from '../relat.js';
+import { Relation, inferTypes, runSouffle } from '../souffle-run.js';
 import { Scenario, scenarios } from './scenarios.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/Tooltip.js';
+import { Switch } from './shadcn/Switch.js';
+import { Label } from './shadcn/Label.js';
+import { MdForward, MdRedo } from 'react-icons/md';
+import { BsArrowsCollapse, BsArrowsCollapseVertical, BsArrowsExpandVertical } from 'react-icons/bs';
 
-async function process(code: string, inputs: Record<string, Relation>) {
+type ProcessResult = {
+  steps: {
+    ast?: Expression,
+    translatedProgram?: Program,
+    output?: Relation,
+  },
+  error?: Error,
+};
+
+async function process(code: string, inputs: Record<string, Relation>, executionEnabled: boolean) {
+  let toReturn: ProcessResult = {
+    steps: {}
+  };
+
   try {
+    // TODO: this is kinda a copy-paste replica of runRelat which outputs
+    // intermediate values; maybe runRelat should provide this as an option?
+
     const codeDesugared = code
       .replaceAll("<_>", "okv[_]")
       .replaceAll(/<([A-Za-z_][A-Za-z0-9_]*)>/g, 'okv["$1"]');
     const ast = parseRelat(codeDesugared);
+    toReturn.steps.ast = ast;
     const inputRelations = _.mapValues(inputs, inferTypes);
     const scope: ScopeRelationsOnly = new Map(
       entries(inputRelations)
@@ -41,36 +61,53 @@ async function process(code: string, inputs: Record<string, Relation>) {
     };
 
     const translated = translate(ast, env);
+    toReturn.steps.translatedProgram = translated.program;
     const fullProgram = translationResultToFullProgram(translated, scope);
     const programString = programToString(fullProgram);
     // console.log(programString);
 
-    const output = await runRelat(codeDesugared, inputs);
+    if (!executionEnabled) {
+      return toReturn;
+    }
 
-    return { ok: true as const, ast, translated, programString, output };
+    const outputUntyped = await runSouffle(programString, inputs);
+    const output = {
+      ...outputUntyped[translated.name],
+      // We know the actual signature, so substitute that in.
+      // (Helps if, say, the result set is empty.)
+      types: translated.intSlots.map(slot => slot.type),
+    };
+    toReturn.steps.output = output;
+
+    return toReturn;
   } catch (e) {
-    return { ok: false as const, error: e };
+    toReturn.error = e as Error;
+    return toReturn;
   }
 }
 
 export const Root = memo(() => {
   const [ scenario, setScenario ] = useState<Scenario>(scenarios[0]);
   const [ code, setCode ] = useState(scenario.examples[0].code);
+  const [ executionEnabled, setExecutionEnabled ] = useState(true);
+  const [ showIntermediates, setShowIntermediates ] = useState(true);
 
-  const [ processed, setProcessed ] = useState<Awaited<ReturnType<typeof process>> | null>(null);
-  const [ lastGoodProcessed, setLastGoodProcessed ] = useState<
-    (Awaited<ReturnType<typeof process>> & { ok: true }) | null
-  >(null);
+  const [ processed, setProcessed ] = useState<ProcessResult | null>(null);
+  const [ lastGoodSteps, setLastGoodSteps ] = useState<ProcessResult["steps"]>({});
 
   useEffect(() => {
     (async () => {
-      const processed = await process(code, scenario.inputs);
+      setProcessed(null);
+      const processed = await process(code, scenario.inputs, executionEnabled);
       setProcessed(processed);
-      if (processed !== null && processed.ok) {
-        setLastGoodProcessed(processed);
-      }
+      setLastGoodSteps((oldLastGoodSteps) => {
+        return {
+          ...oldLastGoodSteps,
+          ...processed.steps,
+        };
+      });
     })();
-  }, [code, scenario.inputs]);
+  }, [code, executionEnabled, scenario.inputs]);
 
   const [ textArea, setTextArea ] = useState<HTMLTextAreaElement | null>(null);
 
@@ -82,8 +119,17 @@ export const Root = memo(() => {
     }
   }, [textArea, code]);
 
-  return <div className='flex flex-col p-6 w-full h-full'>
-    <div className="flex flex-row gap-10 h-1/3">
+  const arrowToggle = (
+    <div className='self-center flex flex-col items-center cursor-pointer group' onClick={() => setShowIntermediates((x) => !x)}>
+      <MdForward className='text-4xl'/>
+      <div className='invisible group-hover:visible'>
+        { showIntermediates ? <BsArrowsCollapseVertical /> : <BsArrowsExpandVertical />}
+      </div>
+    </div>
+  );
+
+  return <div className='main-column flex flex-col p-6 w-full h-full'>
+    <div className="top-row flex flex-row gap-10 h-1/3">
       <div className='flex flex-col justify-end mb-6'>
         <h1 className='text-5xl'>relat</h1>
         <div className='h-2'/>
@@ -115,8 +161,8 @@ export const Root = memo(() => {
       </div>
     </div>
     <hr className='min-h-px my-4 bg-gray-500 border-0'/>
-    <div className='flex flex-row min-h-0 gap-8'>
-      <div className='flex flex-col w-1/2'>
+    <div className='bottom-row flex flex-row min-h-0 gap-8'>
+      <div className='flex flex-col flex-1'>
         <h2 className='text-xl font-bold'>try out...</h2>
         <div className='overflow-auto'>
           {scenario.examples.map((example, i) =>
@@ -134,7 +180,7 @@ export const Root = memo(() => {
         </div>
         <div className='h-4'/>
         <h2 className='text-xl font-bold'>code</h2>
-        <textarea className='p-4 font-mono bg-gray-800 whitespace-pre'
+        <textarea className={clsx('p-4 font-mono bg-gray-800 whitespace-pre', !processed && 'bg-green-950')}
           spellCheck={false}
           value={code}
           ref={setTextArea}
@@ -159,48 +205,63 @@ export const Root = memo(() => {
             }
           }}
         />
-        <div className='h-4'/>
-        <div className={clsx("min-h-0 overflow-hidden flex flex-col", lastGoodProcessed !== processed && "opacity-50")}>
-          <h2 className='text-xl font-bold'>result</h2>
-          { lastGoodProcessed === null
-          ? <p>processing...</p>
-          : <div className='overflow-y-scroll'>
-              <RelationView relation={lastGoodProcessed.output} inspectableValues={scenario.inspectableValues} />
-            </div>
-          }
-        </div>
-        { processed !== null && processed.ok === false &&
+        { processed?.error && <>
+          <div className='h-4'/>
           <pre className="bg-red-950 whitespace-pre-wrap">
             { processed.error instanceof SyntaxError
             ? processed.error.format([{source: code, text: code}]).replace(/^ *--> .*\n/m, '')
             : (processed.error as Error).message
             }
           </pre>
-        }
-      </div>
-      <div className={clsx('flex flex-col w-1/2', lastGoodProcessed !== processed && "opacity-20")}>
-        <h2 className='text-xl font-bold'>code ast</h2>
-        { lastGoodProcessed === null
-        ? <p>processing...</p>
-        : <details className='flex flex-col'>
-            <summary className='flex whitespace-pre-wrap font-mono'>
-              {toSexpr(lastGoodProcessed.ast)}
-            </summary>
-            <pre className='overflow-auto min-h-0'>
-              {JSON.stringify(stripMeta(lastGoodProcessed.ast), null, 2)}
-            </pre>
-          </details>
-        }
+        </>}
         <div className='h-4'/>
-        <h2 className='text-xl font-bold'>generated Datalog</h2>
-        { lastGoodProcessed === null
-        ? <p>processing...</p>
-        : <div className="overflow-auto">
-            <DatalogView program={programToString(lastGoodProcessed.translated.program)} />
-          </div>
-        }
+        <div className="flex items-center space-x-2">
+          <Switch checked={executionEnabled} onCheckedChange={setExecutionEnabled} />
+          <Label htmlFor="airplane-mode">execution enabled?</Label>
+        </div>
       </div>
-
+      { showIntermediates
+        ? <>
+            {arrowToggle}
+            <div className='flex flex-col flex-1'>
+              <div className={clsx('flex flex-col', !processed?.steps.ast && "opacity-50")}>
+                <h2 className='text-xl font-bold'>code ast</h2>
+                { !lastGoodSteps.ast
+                ? <p>not ready yet</p>
+                : <details className='flex flex-col'>
+                    <summary className='flex whitespace-pre-wrap font-mono'>
+                      {toSexpr(lastGoodSteps.ast)}
+                    </summary>
+                    <pre className='overflow-auto min-h-0'>
+                      {JSON.stringify(stripMeta(lastGoodSteps.ast), null, 2)}
+                    </pre>
+                  </details>
+                }
+              </div>
+              <div className='h-4'/>
+              <div className={clsx('flex flex-col min-h-0', !processed?.steps.translatedProgram && "opacity-50")}>
+                <h2 className='text-xl font-bold'>generated Datalog</h2>
+                { !lastGoodSteps.translatedProgram
+                ? <p>not ready yet</p>
+                : <div className="overflow-auto">
+                    <DatalogView program={programToString(lastGoodSteps.translatedProgram)} />
+                  </div>
+                }
+              </div>
+            </div>
+            {arrowToggle}
+          </>
+        : arrowToggle
+      }
+      <div className={clsx("flex flex-col flex-1 min-h-0 overflow-hidden ", !processed?.steps.output && "opacity-50")}>
+          <h2 className='text-xl font-bold'>result</h2>
+          { !lastGoodSteps.output
+          ? <p>processing...</p>
+          : <div className='overflow-y-scroll'>
+              <RelationView relation={lastGoodSteps.output} inspectableValues={scenario.inspectableValues} />
+            </div>
+          }
+      </div>
     </div>
   </div>;
 });
@@ -332,7 +393,7 @@ const RelationView = memo((props: {
               const maybeInspectableValue = inspectableValues.get(value);
               if (maybeInspectableValue !== undefined) {
                 content = <TooltipProvider>
-                  <Tooltip>
+                  <Tooltip delayDuration={0} disableHoverableContent={true}>
                     <TooltipTrigger className='underline decoration-dotted'>{content}</TooltipTrigger>
                     <TooltipContent>
                       <pre className='text-xs max-w-xl max-h-96 overflow-auto'>

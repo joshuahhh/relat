@@ -85,21 +85,21 @@ export const wikipediaJs: Scenario = {
   name: "Wikipedia response",
   inputs: wikipediaObjDB.inputs,
   examples: [{
-    description: "root keys & values?",
+    description: "root keys & values",
     code: "root.okv",
   }, {
-    description: "titles and extracts of pages?",
+    description: "titles and extracts of pages",
     code: normalizeIndent`
-      { page: root.okv["query"].okv["pages"].okv[_] |
+      page: root.okv["query"].okv["pages"].okv[_] |
         "title", page.okv["title"].str;
-        "extract", page.okv["extract"].str }
+        "extract", page.okv["extract"].str
     `,
   }, {
-    description: "titles and extracts of pages (w/sugar)?",
+    description: "titles and extracts of pages (w/sugar)",
     code: normalizeIndent`
-      { page: root.<query>.<pages>.<_> |
+      page: root.<query>.<pages>.<_> |
         "title", page.<title>.str;
-        "extract", page.<extract>.str }
+        "extract", page.<extract>.str
     `,
   }],
   inspectableValues: wikipediaObjDB.idToObj,
@@ -114,11 +114,11 @@ export const hw4: Scenario = {
   }, {
     description: "2. women & men with most children",
     code: normalizeIndent`
-      let num_children = {x : person._ | #parent_child[x]} |
+      let num_children = (x : person._ | #parent_child[x]) |
       let most_mothered = max num_children[female] |
       let most_fathered = max num_children[male] |
-      { x, c: num_children & (female, most_mothered ; male, most_fathered) |
-        person[x] }
+      x, c: num_children & (female, most_mothered ; male, most_fathered) |
+      person[x]
     `,
   }],
 };

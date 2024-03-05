@@ -476,7 +476,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           // 2. new relation includes transitive closure of old relation
           ruleScoped(resultR, operandNamedSlots, [
             atom(resultR, [ operandNamedSlots[0], middleVar ]),
-            atom(resultR, [ middleVar, operandNamedSlots[1] ]),
+            atom(operandR, [ middleVar, operandNamedSlots[1] ]),
           ], env.scope),
         ],
       };
