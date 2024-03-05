@@ -162,7 +162,7 @@ export const Root = memo(() => {
       </div>
     </div>
     <hr className='min-h-px my-4 bg-gray-500 border-0'/>
-    <div className='bottom-row flex flex-row min-h-0 gap-8 items-stretch'>
+    <div className='bottom-row flex-grow flex flex-row min-h-0 gap-8 items-stretch'>
       <div className='flex flex-col flex-1'>
         <h2 className='text-xl font-bold'>try out...</h2>
         <div className='overflow-auto'>
