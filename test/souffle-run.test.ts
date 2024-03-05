@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Relation, runSouffle } from "../src/souffle-run.js";
+import { Relation, runSouffle, runSouffleInWorker } from "../src/souffle-run.js";
 
 describe('runSouffle', () => {
   it('can run ok', async () => {
@@ -42,5 +42,13 @@ describe('runSouffle', () => {
       .output isGreatNumber
     `, { isNiceNumber });
     expect(result).toEqual({ isGreatNumber: { types: ['number'], tuples: [[20], [40]] } });
+  });
+});
+
+describe('runSouffleInWorker', () => {
+  // TODO: no web workers in node
+  it.fails('can run ok', async () => {
+    const result = await runSouffleInWorker("", {});
+    expect(result).toEqual({});
   });
 });

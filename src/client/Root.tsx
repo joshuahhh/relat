@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
 import _ from 'lodash';
-import { ReactNode, memo, useEffect, useMemo, useState } from 'react';
+import { ReactNode, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { BsArrowsCollapseVertical, BsArrowsExpandVertical } from 'react-icons/bs';
 import { MdForward } from 'react-icons/md';
 import { Program, programToString } from '../dl.js';
@@ -10,11 +10,12 @@ import { SyntaxError } from '../relat-grammar/relat-grammar.js';
 import { parseRelat } from '../relat-parse.js';
 import { Environment, SRelation, ScopeRelationsOnly, mkNextIndex, mkRelatVarUnsafe, translate, translationResultToFullProgram } from '../relat-to-dl.js';
 import { Expression, stripMeta, toSexpr } from '../relat.js';
-import { Relation, inferTypes, runSouffle } from '../souffle-run.js';
+import { Relation, inferTypes, runSouffleInWorker } from '../souffle-run.js';
 import { Scenario, scenarios } from './scenarios.js';
 import { Label } from './shadcn/Label.js';
 import { Switch } from './shadcn/Switch.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/Tooltip.js';
+import { cache } from './cache-stuff.js';
 
 type ProcessResult = {
   steps: {
@@ -71,7 +72,7 @@ async function process(code: string, inputs: Record<string, Relation>, execution
       return toReturn;
     }
 
-    const outputUntyped = await runSouffle(programString, inputs);
+    const outputUntyped = await runSouffleInWorker(programString, inputs);
     const output = {
       ...outputUntyped[translated.name],
       // We know the actual signature, so substitute that in.
@@ -87,6 +88,8 @@ async function process(code: string, inputs: Record<string, Relation>, execution
   }
 }
 
+const processCached = cache(process);
+
 export const Root = memo(() => {
   const [ scenario, setScenario ] = useState<Scenario>(scenarios[0]);
   const [ code, setCode ] = useState(scenario.examples[0].code);
@@ -96,10 +99,16 @@ export const Root = memo(() => {
   const [ processed, setProcessed ] = useState<ProcessResult | null>(null);
   const [ lastGoodSteps, setLastGoodSteps ] = useState<ProcessResult["steps"]>({});
 
+  // TODO: this probably works but is there a pattern here?
+  const latestProcessCallIdRef = useRef('');
+
   useEffect(() => {
     (async () => {
       setProcessed(null);
-      const processed = await process(code, scenario.inputs, executionEnabled);
+      const id = Math.random().toString(36).slice(2);
+      latestProcessCallIdRef.current = id;
+      const processed = await processCached(code, scenario.inputs, executionEnabled);
+      if (latestProcessCallIdRef.current !== id) { return; }
       setProcessed(processed);
       setLastGoodSteps((oldLastGoodSteps) => {
         return {
