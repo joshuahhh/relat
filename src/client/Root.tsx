@@ -16,6 +16,7 @@ import { Label } from './shadcn/Label.js';
 import { Switch } from './shadcn/Switch.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/Tooltip.js';
 import { cache } from './cache-stuff.js';
+import { useNavigate } from 'react-router-dom';
 
 type ProcessResult = {
   steps: {
@@ -93,6 +94,10 @@ async function process(code: string, inputs: Record<string, Relation>, execution
 const processCached = cache(process);
 
 export const Root = memo(() => {
+  useEffect(() => {
+    document.body.classList.add("dark");
+  }, [])
+
   const [ scenario, setScenario ] = useState<Scenario>(scenarios[0]);
   const [ code, setCode ] = useState(scenario.examples[0].code);
   const [ executionEnabled, setExecutionEnabled ] = useState(true);
@@ -100,6 +105,8 @@ export const Root = memo(() => {
 
   const [ processed, setProcessed ] = useState<ProcessResult | null>(null);
   const [ lastGoodSteps, setLastGoodSteps ] = useState<ProcessResult["steps"]>({});
+
+  const navigate = useNavigate();
 
   // TODO: this probably works but is there a pattern here?
   const latestProcessCallIdRef = useRef('');
@@ -235,6 +242,11 @@ export const Root = memo(() => {
         <div className="flex items-center space-x-2 mt-auto">
           <Switch checked={executionEnabled} onCheckedChange={setExecutionEnabled} />
           <Label htmlFor="airplane-mode">execution enabled?</Label>
+          <div className='flex-grow'/>
+          <button className='text-[#646cff] hover:text-[#535bf2] text-left'
+            onClick={() => navigate('./syntax')}>
+            syntax guide
+          </button>
         </div>
       </div>
       <AnimatePresence initial={false}>
@@ -303,7 +315,7 @@ export const Root = memo(() => {
 const DatalogView = memo(({ program }: { program: string }) => {
   // TODO: put stuff on right of :- all on right?
   // TODO: color variables per line?
-  const lines = program.split('\n');
+  const lines = program.trim().split('\n');
   return <div>
     {lines.map((line, i) => {
       const isRule = line.includes(' :- ');

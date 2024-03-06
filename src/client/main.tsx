@@ -5,6 +5,7 @@ import { Root } from './Root.js'
 import './style.css'
 import * as Peggy from 'peggy';
 import * as lib from '../lib.js';
+import { Syntax } from './Syntax.js'
 
 (window as any).lib = lib;
 (window as any).Peggy = Peggy;
@@ -13,6 +14,7 @@ ReactDOM.createRoot(document.getElementById('app')!).render(
   <React.StrictMode>
     <HashRouter>
       <Routes>
+        <Route path="syntax" element={<Syntax/>}/>
         <Route path="*" element={<Root/>}/>
       </Routes>
     </HashRouter>

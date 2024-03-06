@@ -1,7 +1,5 @@
 /** @type {import('tailwindcss').Config} */
 
-const { fontFamily } = require("tailwindcss/defaultTheme")
-
 // eslint-disable-next-line import/no-anonymous-default-export
 export default {
   dark: "class",
@@ -19,6 +17,9 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        classy: ["Optima"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
