@@ -19,7 +19,7 @@ export type Scenario = {
 }
 
 export const movies: Scenario = {
-  name: "Movies",
+  name: "IMDB movies",
   inputs: moviesInputs as any,
   examples: [{
     description: "how many movies of each genre?",
