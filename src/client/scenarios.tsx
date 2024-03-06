@@ -6,6 +6,7 @@ import { mkJsObjDB } from "./js.js";
 import { hw4Inputs } from './scenario-data/hw4/hw4Inputs.js';
 import moviesInputs from "./scenario-data/movies.json";
 import wikipedia from './scenario-data/wikipedia.json';
+import wikipediaHtmlJson from './scenario-data/wikipedia-html.json';
 
 export type Scenario = {
   name: string,
@@ -242,12 +243,40 @@ export const acorn: Scenario = {
   }),
 };
 
+const wikipediaHtmlObjDB = mkJsObjDB(wikipediaHtmlJson);
+
+export const wikipediaHtml: Scenario = {
+  name: "Wikipedia HTML",
+  inputs: wikipediaHtmlObjDB.inputs,
+  examples: [{
+    description: "root keys & values",
+    code: "root.okv",
+  }, {
+    description: "src of images",
+    code: normalizeIndent`
+      x : any ->
+        x.okv["tagName"].str = '"IMG"',
+        x.okv["attrs"].okv["src"].str
+    `,
+  }],
+  info: <p>
+    HTML of the <a className="text-[#646cff] hover:text-[#535bf2]" href="https://en.wikipedia.org/wiki/Datalog">Wikipedia page on Datalog</a>,
+    parsed into a JSON object. (The {'<>'} sugar doesn't work here; it's too slow for interesting reasons.)
+  </p>,
+  valueInspectors: mapValues(wikipediaHtmlObjDB.idToObj, (obj) =>
+    <pre className='text-xs max-w-xl max-h-96 overflow-auto'>
+      {JSON.stringify(obj, null, 2)}
+    </pre>
+  ),
+}
+
 export const scenarios: Scenario[] = [
   movies,
   simpleFamily,
   wikipediaJs,
   hw4,
   acorn,
+  wikipediaHtml,
 ];
 
 function mapValues<K, V, V2>(map: Map<K, V>, f: (v: V) => V2): Map<K, V2> {

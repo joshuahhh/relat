@@ -241,7 +241,7 @@ export const Root = memo(() => {
         <div className='h-4'/>
         <div className="flex items-center space-x-2 mt-auto">
           <Switch checked={executionEnabled} onCheckedChange={setExecutionEnabled} />
-          <Label htmlFor="airplane-mode">execution enabled?</Label>
+          <Label>execution enabled?</Label>
           <div className='flex-grow'/>
           <button className='text-[#646cff] hover:text-[#535bf2] text-left'
             onClick={() => navigate('./syntax')}>
