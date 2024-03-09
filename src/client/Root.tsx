@@ -95,6 +95,8 @@ const processCached = cache(process);
 
 export const Root = memo(() => {
   useEffect(() => {
+    // TODO: yuk
+    document.body.classList.add("viewer");
     document.body.classList.add("dark");
   }, [])
 

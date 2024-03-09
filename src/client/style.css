@@ -80,8 +80,7 @@
   }
 }
 
-/* TODO: use .dark as proxy for relat viewer, idk */
-body.dark, body.dark #app {
+body.viewer, body.viewer #app {
   margin: 0;
   padding: 0;
   width: 100vw;

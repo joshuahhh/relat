@@ -2,6 +2,7 @@ import { ReactNode, memo, useEffect } from "react"
 
 export const Syntax = memo(() => {
   useEffect(() => {
+    document.body.classList.remove("viewer");
     document.body.classList.remove("dark");
   }, [])
   return <div className="p-12 font-classy max-w-prose mx-auto">
