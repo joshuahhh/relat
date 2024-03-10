@@ -5,9 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5176",
-    "build": "tsc && vite build",
+    "build": "yarn peggy && tsc && vite build",
     "preview": "vite preview",
-    "wasm-to-js": "tsx src/souffle-emscripten/wasm-to-js.ts",
     "peggy": "peggy --format es src/relat-grammar/relat-grammar.pegjs",
     "peggy:watch": "ls src/relat-grammar/relat-grammar.pegjs | entr -c npm run peggy",
     "test": "vitest run",
