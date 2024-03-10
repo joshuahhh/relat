@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Relation, runSouffle, runSouffleInWorker } from "../src/souffle-run.js";
+import { Relation, runSouffle } from "../src/souffle-run.js";
+import { runSouffleInWorker } from "../src/souffle-run-in-worker.js";
 
 describe('runSouffle', () => {
   it('can run ok', async () => {

@@ -10,13 +10,14 @@ import { SyntaxError } from '../relat-grammar/relat-grammar.js';
 import { parseRelat } from '../relat-parse.js';
 import { Environment, SRelation, ScopeRelationsOnly, mkNextIndex, mkRelatVarUnsafe, translate, translationResultToFullProgram } from '../relat-to-dl.js';
 import { Expression, stripMeta, toSexpr } from '../relat.js';
-import { Relation, inferTypes, runSouffleInWorker } from '../souffle-run.js';
+import { Relation, inferTypes } from '../souffle-run.js';
 import { Scenario, scenarios } from './scenarios.js';
 import { Label } from './shadcn/Label.js';
 import { Switch } from './shadcn/Switch.js';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './shadcn/Tooltip.js';
 import { cache } from './cache-stuff.js';
 import { useNavigate } from 'react-router-dom';
+import { runSouffleInWorker } from '../souffle-run-in-worker.js';
 
 type ProcessResult = {
   steps: {

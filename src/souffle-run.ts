@@ -1,4 +1,3 @@
-import { WorkerPool } from './function-workers.js';
 import loadSouffleModule from './souffle-emscripten/souffle.js';
 import { type Type } from './souffle-types.js';
 
@@ -122,19 +121,4 @@ export async function runSouffle(
     }
   });
   return outputRelations;
-}
-
-let _souffleWorkerPool: WorkerPool<typeof runSouffle> | null = null;
-function getSouffleWorkerPool() {
-  if (!_souffleWorkerPool) {
-    _souffleWorkerPool = new WorkerPool(new URL('souffle-run-worker.js', import.meta.url), 5);
-  }
-  return _souffleWorkerPool;
-}
-
-export async function runSouffleInWorker(
-  code: string,
-  inputRelations: Record<string, Relation | any[][]>
-): Promise<Record<string, Relation>> {
-  return await getSouffleWorkerPool().call(code, inputRelations);
 }
