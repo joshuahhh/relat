@@ -20,7 +20,6 @@
     "sourceMap": true,
     "noEmit": true,
     "declaration": true,
-    "declarationMap": true,
-    "incremental": true
+    "declarationMap": true
   }
 }

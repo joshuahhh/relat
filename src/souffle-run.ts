@@ -1,14 +1,11 @@
 import { WorkerPool } from './function-workers.js';
 import loadSouffleModule from './souffle-emscripten/souffle.js';
-import souffleWasmStr from './souffle-emscripten/souffle.wasm.js';
 import { type Type } from './souffle-types.js';
 
 
 // This is my packaged driver for running Souffle, using the Emscripten-packaged
 // module in the `souffle-emscripten` directory. The driver just takes raw code
 // and input relations and returns output relations.
-
-const wasmBinary = Uint8Array.from(atob(souffleWasmStr), c => c.charCodeAt(0));
 
 export type Relation = {
   types: Type[],
@@ -75,8 +72,6 @@ export async function runSouffle(
   // let now = Date.now();
   const errorLines: string[] = [];
   const module = await loadSouffleModule({
-    // wasmMemory,
-    wasmBinary,
     noInitialRun: true,
     printErr: (line) => {
       errorLines.push(line);
