@@ -171,15 +171,15 @@ export const Root = memo(() => {
         )}
       </div>
       { scenario.info &&
-        <div className='flex flex-col justify-end mb-6 overflow-y-scroll max-w-60'>
+        <div className='flex flex-col justify-end mb-6 overflow-y-auto max-w-60'>
           {scenario.info}
         </div>
       }
-      <div className='flex flex-row overflow-x-scroll'>
+      <div className='flex flex-row overflow-x-auto'>
         {entries(scenario.inputs).map(([name, relation]) => <>
           <div key={name} className="flex flex-col items-start w-fit">
             <h3 className='text-lg font-bold'>{name}</h3>
-            <div className='overflow-y-scroll w-fit'>
+            <div className='overflow-y-auto w-fit'>
               <RelationView relation={relation} valueInspectors={scenario.valueInspectors} />
             </div>
           </div>
@@ -301,7 +301,7 @@ export const Root = memo(() => {
           <h2 className='text-xl font-bold'>result</h2>
           { !lastGoodSteps.output
           ? <p>processing...</p>
-          : <div className='overflow-y-scroll'>
+          : <div className='overflow-y-auto'>
               <RelationView relation={lastGoodSteps.output} valueInspectors={scenario.valueInspectors} />
             </div>
           }
