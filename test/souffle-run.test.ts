@@ -23,11 +23,11 @@ describe('runSouffle', () => {
       isNiceNumber(20).
 
       .decl isGreatNumber(x : number)
-      isGreatNumber(x) :- isNiceNumber(x).
+      isGreatNumber(y) :- isNiceNumber(x), y = 2 * x.
 
       .output isGreatNumber
     `, {});
-    expect(result).toEqual({isGreatNumber: {types: ['number'], tuples: [[10], [20]]}});
+    expect(result).toEqual({isGreatNumber: {types: ['number'], tuples: [[20], [40]]}});
   });
 
   it('can run a simple program with input', async () => {
