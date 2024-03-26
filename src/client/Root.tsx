@@ -104,7 +104,7 @@ export const Root = memo(() => {
   const [ scenario, setScenario ] = useState<Scenario>(scenarios[0]);
   const [ code, setCode ] = useState(scenario.examples[0].code);
   const [ executionEnabled, setExecutionEnabled ] = useState(true);
-  const [ showIntermediates, setShowIntermediates ] = useState(true);
+  const [ showIntermediates, setShowIntermediates ] = useState(false);
 
   const [ processed, setProcessed ] = useState<ProcessResult | null>(null);
   const [ lastGoodSteps, setLastGoodSteps ] = useState<ProcessResult["steps"]>({});
