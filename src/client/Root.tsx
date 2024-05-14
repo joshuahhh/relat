@@ -193,7 +193,7 @@ export const Root = memo(() => {
         <h2 className='text-xl font-bold'>try out...</h2>
         <div className='overflow-auto'>
           {scenario.examples.map((example, i) =>
-            <button key={i} className='block text-[#646cff] hover:text-[#535bf2] text-left'
+            <button key={i} className='block text-[#646cff] hover:text-[#535bf2] text-left mb-2'
               onClick={() => setCode(example.code.trim())}
             >
               <div className='italic'>
