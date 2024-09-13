@@ -40,7 +40,7 @@ export const movies: Scenario = {
   }, {
     description: "which pairs act together a lot?",
     code: normalizeIndent`
-      let actors = isTitle.hasActor |
+      let actors = hasActor[_] |
       a1: actors | a2: actors | a2 > a1,
       let hasBothActors = hasActor.a1 & hasActor.a2 |
       #hasBothActors >= 3,
