@@ -806,7 +806,7 @@ export function translate(exp: Relat.Expression, env: Environment): TranslationR
           ], env.scope),
         ],
       };
-    } else if (exp.type === 'binary' && (exp.op === '=' || exp.op === '<' || exp.op === '>' || exp.op === '<=' || exp.op === '>=')) {
+    } else if (exp.type === 'binary' && (exp.op === '=' || exp.op === '<' || exp.op === '>' || exp.op === '<=' || exp.op === '>=' || exp.op === '!=')) {
       /***************
        * COMPARISONS *
        ***************/

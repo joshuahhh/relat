@@ -38,6 +38,11 @@ describe("runRelat", () => {
     expect(await runRelat("100 = 200", {})).toEqual(FALSE);
   });
 
+  it("inequality of numbers", async () => {
+    expect(await runRelat("100 != 100", {})).toEqual(FALSE);
+    expect(await runRelat("100 != 200", {})).toEqual(TRUE);
+  });
+
   it("arithmetic", async () => {
     expect(await runRelat("100 + 200", {})).toEqual(inferTypes([[300]]));
     expect(await runRelat("200 - 100", {})).toEqual(inferTypes([[100]]));

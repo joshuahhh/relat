@@ -46,7 +46,7 @@ E2b
     { return associateLeft("&", left, rights, range()); }
 
 E3
-  = left:E4 _ op:("<=" / ">=" / "=" / "<" / ">") _ right: E4
+  = left:E4 _ op:("<=" / ">=" / "=" / "<" / ">" / "!=") _ right: E4
     { return { type: "binary", op, left, right, range: range() }; }
   / E4
 

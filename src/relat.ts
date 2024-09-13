@@ -29,7 +29,7 @@ export type Expression<Meta = {range: Range}> = Meta & (
     }
   | {
       type: 'binary',
-      op: '.' | '=' | '<' | '>' | '<=' | '>=' | ';' | '&' | ',' | '[]' | '\\' | '<:' | ':>' | '+' | '-' | '*',
+      op: '.' | '=' | '<' | '>' | '<=' | '>=' | '!=' | ';' | '&' | ',' | '[]' | '\\' | '<:' | ':>' | '+' | '-' | '*',
       left: Expression<Meta>,
       right: Expression<Meta>,
     }
